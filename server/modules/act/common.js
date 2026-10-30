@@ -4,7 +4,7 @@ import { nameOf, requireUser } from '../../core/users.js';
 
 // Shared by the act routes. Activity data lives in Tx Data (client `tx`), one table set per activity:
 // mt_<key>_* / tx_<key>_* made by scripts/act-sql.js. Employees and logins stay in Mx Data (client `mx`).
-export const ACTIVITIES = ['5s'];
+export const ACTIVITIES = ['5s', 'cfo'];
 const PAGE = 1000;
 
 // Decimal rounding (85.15 -> 85.2) like the old system and SQL; plain Math.round(n * 10) gives 85.1.
@@ -24,7 +24,16 @@ export function tablesOf(activity) {
     audit: `tx_${k}_audit`,
     score: `tx_${k}_audit_score`,
     issue: `tx_${k}_issue`,
-    group: `v_${k}_audit_group`
+    group: `v_${k}_audit_group`,
+    // CFO only (scripts/act-sql.js cfoSql)
+    cfoScope: `mt_${k}_scope`,
+    gwp: `mt_${k}_gwp`,
+    ef: `mt_${k}_ef`,
+    activity: `mt_${k}_activity`,
+    entry: `tx_${k}_entry`,
+    entryView: `v_${k}_entry`,
+    s3Assess: `mt_${k}_s3_assess`,
+    revision: `tx_${k}_revision`
   };
 }
 

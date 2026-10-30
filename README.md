@@ -1,6 +1,6 @@
-# TSAT4 5S
+# TSAT4 Activity
 
-ระบบกิจกรรม 5S (Dashboard · ตรวจพื้นที่และ Issue · ทีม · แผนงาน · พื้นที่ · Checklist · แผนตรวจ · ปฏิทิน)
+ระบบกิจกรรมเว็บเดียว: **5S** (Dashboard · ตรวจพื้นที่และ Issue · ทีม · แผนงาน · พื้นที่ · Checklist · แผนตรวจ) และ **CFO** (Carbon Footprint for Organization: Dashboard · บันทึกรายเดือน · Fr-01 – Fr-04.1) + ปฏิทินรวม
 แยกออกมาจาก TSAT4 SMF เมื่อ 2026-10-30 · มี Render และ Supabase ของตัวเอง
 
 ## เทคโนโลยี
@@ -31,16 +31,17 @@
 5. login ด้วย `2102899` + รหัสผ่านแรก → Setting → `mt_main_employee` แก้ชื่อตัวเอง แล้วเพิ่มหน่วยงาน (`mt_main_costcenter`) พนักงาน และบัญชี (`mt_main_user`)
 6. หลัง login ได้แล้ว ลบ `BOOTSTRAP_PASSWORD` ออกจาก Render ได้
 
-### 3. ตั้งค่า 5S
+### 3. ตั้งค่ากิจกรรม
 
-5S → Setting: ทีม (เลขา = ผู้ดูแลปีนั้น) → แผนงาน → พื้นที่ → หัวข้อตรวจ → แผนตรวจ
+- 5S → Setting: ทีม (เลขา = ผู้ดูแลปีนั้น) → แผนงาน → พื้นที่ → หัวข้อตรวจ → แผนตรวจ
+- CFO → Setting: ทีม → บริษัท (Fr-01) → EF / กิจกรรมรายหน่วยงาน
 
 ## พัฒนา
 
 ```
 npm install
 npm run check      # ตรวจ syntax, route, เปิดเซิร์ฟเวอร์
-npm run test:act   # ทดสอบ db/setup.sql และตาราง 5S บน Postgres จำลอง
+npm run test:act   # ทดสอบ db/setup.sql และตาราง 5S / CFO บน Postgres จำลอง
 npm start
 ```
 

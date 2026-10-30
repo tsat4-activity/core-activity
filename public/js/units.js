@@ -1,6 +1,7 @@
-// Unit catalog: this app has one activity, 5S (pages in act-5s.js). Other systems live in TSAT4 SMF.
+// Unit catalog: the activities of this app (5S pages in act-5s.js, CFO pages in act-cfo.js).
 const ACTIVITIES = [
-  ['5s', '5S', 'event']
+  ['5s', '5S', 'event'],
+  ['cfo', 'CFO', 'event']
 ];
 const PLANT_PAGES = [
   ['home', 'monitoring', 'Dashboard', 'ภาพรวม'],

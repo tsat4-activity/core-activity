@@ -4,10 +4,11 @@ AI ไม่มีสิทธิ์เข้าฐานข้อมูล ผ�
 
 | ไฟล์ | ใช้ทำอะไร |
 |---|---|
-| `setup.sql` | **ฐานว่าง รันไฟล์นี้ไฟล์เดียว** = `00_main.sql` + `act/5s.sql` (สร้างด้วย `node scripts/setup-sql.js` ห้ามแก้มือ) รันซ้ำได้ |
+| `setup.sql` | **ฐานว่าง รันไฟล์นี้ไฟล์เดียว** = `00_main.sql` + `act/5s.sql` + `act/cfo.sql` (สร้างด้วย `node scripts/setup-sql.js` ห้ามแก้มือ) รันซ้ำได้ |
 | `00_main.sql` | ตารางกลาง `mt_main_employee`, `mt_main_costcenter`, `mt_main_user` + รหัสผู้ดูแลแรก 2102899 |
 | `act/5s.sql` | ตาราง 5S ทั้งชุด + bucket `img_5s` สร้างจาก `scripts/act-sql.js` เท่านั้น ห้ามแก้มือ |
+| `act/cfo.sql` | ตาราง CFO ทั้งชุด (Scope, GWP, EF, กิจกรรม, บันทึกรายเดือน, Fr-03.2, ประวัติปรับปรุง) + bucket `img_cfo` สร้างจาก `scripts/act-sql.js` ห้ามแก้มือ รันซ้ำได้ |
 | `act/5s_task.sql` | สำหรับฐาน 5S เก่าที่ยังไม่มี Project Planner (ฐานใหม่ไม่ต้องใช้) |
 | `act/5s_team_roles.sql` | สำหรับฐาน 5S เก่าที่ยังไม่มีบทบาท `advisor` (ฐานใหม่ไม่ต้องใช้) |
 
-เปลี่ยนแม่แบบ: แก้ `scripts/act-sql.js` → `node scripts/act-sql.js 5s` → `node scripts/setup-sql.js` → `npm run test:act`
+เปลี่ยนแม่แบบ: แก้ `scripts/act-sql.js` → `node scripts/act-sql.js 5s` (CFO: `node scripts/act-sql.js cfo --no-audit --no-planner`) → `node scripts/setup-sql.js` → `npm run test:act`

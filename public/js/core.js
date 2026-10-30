@@ -3,7 +3,7 @@
 const RANK = { viewer: 1, user: 2, admin: 3 };
 const PAGE = 50;
 const TITLES = {
-  main: ['TSAT4 5S', 'หน้าหลัก']
+  main: ['TSAT4 Activity', 'หน้าหลัก']
 };
 // view name -> render(target)
 const VIEWS = {};
@@ -471,11 +471,10 @@ function modulePage(target, title, meta, cards) {
 }
 
 async function renderMain(target) {
-  modulePage(target, 'TSAT4 5S', 'เลือกส่วนที่ต้องการเข้า', [
-    ['5s-home', 'monitoring', 'Dashboard', 'ภาพรวม 5S'],
-    ['5s-edit', 'edit_note', 'Transaction', 'ตรวจพื้นที่และ Issue'],
-    ['5s-setting', 'settings', 'Setting', 'ทีม แผนงาน พื้นที่ Checklist'],
-    ['act-plan', 'calendar_month', 'ปฏิทิน', 'แผน 5S รายสัปดาห์ เดือน และปี']
+  modulePage(target, 'TSAT4 Activity', 'เลือกกิจกรรมที่ต้องการเข้า', [
+    ['5s', 'event', '5S', 'Dashboard, Transaction, Setting'],
+    ['cfo', 'eco', 'CFO', 'Carbon Footprint for Organization'],
+    ['act-plan', 'calendar_month', 'ปฏิทิน', 'แผนของทุกกิจกรรม รายสัปดาห์ เดือน และปี']
   ]);
 }
 

@@ -1,5 +1,8 @@
 DELETE /api/act/:activity/areas/:id auth
 DELETE /api/act/:activity/audits/:id auth
+DELETE /api/act/:activity/cfo/activities/:id auth
+DELETE /api/act/:activity/cfo/ef/:id auth
+DELETE /api/act/:activity/cfo/entries/:id auth
 DELETE /api/act/:activity/checklist/:id auth
 DELETE /api/act/:activity/tasks/:id auth
 DELETE /api/act/:activity/team/:id auth
@@ -9,6 +12,12 @@ GET /api/act/:activity/audit-form auth
 GET /api/act/:activity/audit-plan auth
 GET /api/act/:activity/audits auth
 GET /api/act/:activity/audits/:id auth
+GET /api/act/:activity/cfo/inventory auth
+GET /api/act/:activity/cfo/master auth
+GET /api/act/:activity/cfo/progress auth
+GET /api/act/:activity/cfo/revisions auth
+GET /api/act/:activity/cfo/s3 auth
+GET /api/act/:activity/cfo/summary auth
 GET /api/act/:activity/checklist auth
 GET /api/act/:activity/dashboard/ranking auth
 GET /api/act/:activity/dashboard/schedule auth
@@ -26,6 +35,8 @@ GET /api/system/tables auth creator
 GET /api/system/tables/:name auth creator
 PATCH /api/act/:activity/areas/:id auth
 PATCH /api/act/:activity/audits/:id auth
+PATCH /api/act/:activity/cfo/activities/:id auth
+PATCH /api/act/:activity/cfo/ef/:id auth
 PATCH /api/act/:activity/checklist/:id auth
 PATCH /api/act/:activity/issues/:id auth
 PATCH /api/act/:activity/tasks/:id auth
@@ -34,6 +45,11 @@ PATCH /api/act/:activity/team/:id auth
 PATCH /api/system/tables/:name auth creator
 POST /api/act/:activity/areas auth
 POST /api/act/:activity/audits auth
+POST /api/act/:activity/cfo/activities auth
+POST /api/act/:activity/cfo/confirm auth
+POST /api/act/:activity/cfo/ef auth
+POST /api/act/:activity/cfo/photo auth
+POST /api/act/:activity/cfo/revisions auth
 POST /api/act/:activity/checklist auth
 POST /api/act/:activity/checklist/copy auth
 POST /api/act/:activity/issues/:id/action auth
@@ -47,3 +63,6 @@ POST /api/password auth
 POST /api/system/tables/:name auth creator
 PUT /api/act/:activity/areas/:id/owner auth
 PUT /api/act/:activity/audit-plan auth
+PUT /api/act/:activity/cfo/entries auth
+PUT /api/act/:activity/cfo/s3 auth
+PUT /api/act/:activity/cfo/settings auth
