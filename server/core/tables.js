@@ -1,4 +1,14 @@
-// Shared master tables (mt_main_*: employees, cost centers, accounts) live in Mx Data and are owned by TSAT4 SMF.
-// They are edited there, never here: saving an account here would drop its admin_of for the other systems.
-// So System > Setting in this app shows only the 5S tables (server/modules/act/index.js).
-export const MAIN_TABLES = {};
+// Master tables (mt_main_*) shown in System > Setting. This app owns them (its own Supabase, db/00_main.sql). Column: [name, type, required].
+// Types are validated in server/modules/system/index.js (adminValue).
+export const MAIN_TABLES = {
+  mt_main_employee: { db: 'mx', pk: ['employee_id'], columns: [
+    ['employee_id', 'text', true], ['prefix', 'prefix'], ['first_name', 'text', true], ['last_name', 'text', true],
+    ['position', 'text'], ['level', 'level', true], ['department', 'dept'], ['status', 'status', true]
+  ] },
+  mt_main_costcenter: { db: 'mx', pk: ['costcenter'], columns: [
+    ['costcenter', 'text', true], ['object_name', 'text', true], ['group_name', 'group', true], ['department', 'text', true], ['status', 'status', true]
+  ] },
+  mt_main_user: { db: 'mx', pk: ['employee_id'], columns: [
+    ['employee_id', 'text', true], ['department', 'read'], ['password', 'password'], ['creator', 'bool'], ['executive', 'bool'], ['admin_of', 'scopes'], ['status', 'status', true], ['password_expires_at', 'read']
+  ] }
+};

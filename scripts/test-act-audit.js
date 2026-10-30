@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PGlite } from '@electric-sql/pglite';
 import { actSql, actTaskSql } from './act-sql.js';
+import { setupSql } from './setup-sql.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const importFile = path.join(ROOT, 'inbox', 'import_5s.sql');
@@ -16,6 +17,24 @@ const throws = async (db, sql) => { try { await db.exec(sql); return false; } ca
 
 ok(fs.readFileSync(path.join(ROOT, 'db', 'act', '5s.sql'), 'utf8') === actSql('5s'), 'db/act/5s.sql is up to date (node scripts/act-sql.js 5s)');
 ok(fs.readFileSync(path.join(ROOT, 'db', 'act', '5s_task.sql'), 'utf8') === actTaskSql('5s'), 'db/act/5s_task.sql is up to date (node scripts/act-sql.js 5s --add-task)');
+ok(fs.readFileSync(path.join(ROOT, 'db', 'setup.sql'), 'utf8') === setupSql(), 'db/setup.sql is up to date (node scripts/setup-sql.js)');
+
+// A new Supabase: db/setup.sql builds everything on an empty database, twice.
+{
+  const fresh = new PGlite();
+  await fresh.exec(`do $$ begin create role anon; create role authenticated; exception when duplicate_object then null; end $$;`);
+  await fresh.exec(setupSql());
+  await fresh.exec(setupSql());
+  ok((await one(fresh, `select count(*)::int n from mt_main_employee where employee_id = '2102899'`)).n === 1, 'setup.sql: first admin employee seeded once');
+  ok((await one(fresh, `select count(*)::int n from pg_constraint where conname = 'mt_main_user_employee_id_fkey'`)).n === 1, 'setup.sql: login FK has the name loadUser joins on');
+  await fresh.exec(`insert into mt_main_user (employee_id, password_hash, creator, password_changed_at) values ('2102899', 'x', true, '2026-01-01T00:00:00Z')`);
+  ok((await one(fresh, `select (password_expires_at = '2026-04-01T00:00:00Z'::timestamptz) ok from mt_main_user`)).ok, 'setup.sql: a password lasts 90 days');
+  await fresh.exec(`update mt_main_user set password_changed_at = '2026-02-01T00:00:00Z'`);
+  ok((await one(fresh, `select (password_expires_at = '2026-05-02T00:00:00Z'::timestamptz) ok from mt_main_user`)).ok, 'setup.sql: changing the password moves the expiry');
+  ok(await throws(fresh, `insert into mt_main_user (employee_id, password_hash) values ('nobody', 'x')`), 'setup.sql: a login needs an employee');
+  ok(await throws(fresh, `insert into mt_main_employee (employee_id, first_name, last_name, level) values ('9', 'a', 'b', 'X9')`), 'setup.sql: level from the list only');
+  await fresh.close();
+}
 
 const db = new PGlite();
 await db.exec(`do $$ begin create role anon; create role authenticated; exception when duplicate_object then null; end $$;`);

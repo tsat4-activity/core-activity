@@ -1,14 +1,14 @@
 # กฎสำหรับ AI ทุกตัวในโปรเจกต์นี้ (TSAT4 5S)
 
-TSAT4 5S = ระบบกิจกรรม 5S แยกออกมาจาก TSAT4 SMF (2026-10-30) เป็น repo และ Render ของตัวเอง แต่ **ใช้ Supabase ชุดเดียวกับ TSAT4 SMF**
-**ระบบที่ deploy อยู่ต้องไม่พัง** และ **ห้ามทำให้ TSAT4 SMF พัง** เพราะใช้ฐานข้อมูลร่วมกัน
+TSAT4 5S = ระบบกิจกรรม 5S แยกออกมาจาก TSAT4 SMF (2026-10-30) มี GitHub (tsat4-activity/core-activity), Render และ **Supabase ของตัวเอง**
+**ระบบที่ deploy อยู่ต้องไม่พัง** ทุกตัวจึงต้องทำตามกฎนี้ทุกครั้ง
 
 ## 0. ขอบเขต
 
-- **Mx Data** (`mt_main_employee`, `mt_main_costcenter`, `mt_main_user`) เป็นของ TSAT4 SMF: แอปนี้ **อ่านอย่างเดียว** (login, ชื่อพนักงาน, หน่วยงาน) ยกเว้นเปลี่ยนรหัสผ่านของตัวเอง · ไม่มีใน System Setting โดยตั้งใจ (`server/core/tables.js`)
-  เพิ่มพนักงาน / บัญชี / สิทธิ์ผู้ดูแล 5S (`admin_of` = `5s`) ทำที่ TSAT4 SMF
-- **Tx Data** ตาราง `mt_5s_*` / `tx_5s_*` และ bucket `img_5s`: ทั้งสองแอปเห็นข้อมูลเดียวกัน · **เปลี่ยนโครงตาราง 5S ต้องตกลงกับฝั่ง TSAT4 SMF ก่อน** (แม่แบบ `scripts/act-sql.js` ต้องตรงกันทั้งสอง repo)
-- ห้ามแตะตารางของระบบอื่นใน Supabase (`mt_sto_*`, `tx_sto_*`, ตารางกิจกรรมอื่น)
+- Supabase โปรเจกต์เดียว เก็บทั้งตารางกลาง `mt_main_*` (พนักงาน, หน่วยงาน, บัญชี login) และตาราง 5S `mt_5s_*` / `tx_5s_*` + bucket `img_5s`
+  env `MX_SUPABASE_*` และ `TX_SUPABASE_*` ใส่ค่าเดียวกัน (โค้ดยังแยก client `mx` / `tx` ไว้ เผื่อแยกฐานภายหลัง)
+- ตั้งฐานใหม่: `db/setup.sql` (= `db/00_main.sql` + `db/act/5s.sql` สร้างด้วย `node scripts/setup-sql.js`)
+- ไม่ผูกกับ TSAT4 SMF แล้ว: ข้อมูลไม่ใช้ร่วมกัน · ถ้าจะรับ-ส่งข้อมูลกับระบบอื่นให้ทำตามมาตรฐานร่วม (view `share_*` + คีย์อ่านอย่างเดียว)
 - deploy: push ขึ้น `main` → Render deploy อัตโนมัติ
 
 ## 1. ก่อนเริ่มงาน (ทำทุกครั้ง ทุก session)
@@ -91,7 +91,7 @@ TSAT4 5S = ระบบกิจกรรม 5S แยกออกมาจา�
 - `server/core/` ใส่ได้เฉพาะของที่ใช้ร่วมกันตั้งแต่ 2 โมดูลขึ้นไป
 - ทุก route ที่ไม่ใช่ public ต้องมี `wrap(requireUser)` ตามด้วย `atLeast(mod, n)` หรือ `creatorOnly`
 - ไฟล์ใน `public/js/` ใช้ global scope ร่วมกัน ชื่อ top-level ห้ามซ้ำกันข้ามไฟล์ ให้ใส่ prefix ของโมดูล เช่น `a5Render`, `A5_ROLE_LABEL`
-- ฐานข้อมูล 2 ก้อน (ใช้ร่วมกับ TSAT4 SMF): **Mx Data** (client `mx`) = ตารางกลาง `mt_main_*` อ่านอย่างเดียว · **Tx Data** (client `tx`) = ตาราง 5S `mt_5s_*` / `tx_5s_*` (เช่น mt_5s_area, tx_5s_audit)
+- ฐานข้อมูล: client `mx` = ตารางกลาง `mt_main_*` · client `tx` = ตาราง 5S `mt_5s_*` / `tx_5s_*` (ตอนนี้ทั้งคู่ชี้ Supabase โปรเจกต์เดียวกัน)
 - รูปของกิจกรรมเก็บใน Supabase Storage ของ Tx Data แยก bucket ต่อกิจกรรม ชื่อ `img_<กิจกรรม>` (เช่น `img_5s`) สร้างมาพร้อม `db/act/<กิจกรรม>.sql` · ชื่อในโค้ดใช้ `tablesOf(กิจกรรม).bucket`
 - ตารางกิจกรรมสร้างจากแม่แบบเท่านั้น: `node scripts/act-sql.js <กิจกรรม>` → `db/act/<กิจกรรม>.sql` ห้ามแก้ไฟล์ใน db/act/ ด้วยมือ (แก้ที่ scripts/act-sql.js แล้วสร้างใหม่) และชื่อตารางในโค้ดมาจาก `tablesOf()` ใน server/modules/act/common.js
 

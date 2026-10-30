@@ -11,7 +11,7 @@ const CHOICES = {
 TITLES.system = ['Setting', 'ตารางทั้งระบบ'];
 const SYS_LEVEL_NAMES = { M: 'ผู้จัดการ', G: 'ผู้จัดการโรงงาน' };
 let sysDepts = null; // department choices = departments in mt_main_costcenter (GET /api/system/choices)
-// mt_main_user.admin_of choices (server: ADMIN_SCOPES in server/core/access.js). Accounts are edited in TSAT4 SMF.
+// mt_main_user.admin_of choices (server: ADMIN_SCOPES in server/core/access.js).
 const SYS_SCOPES = ACTIVITIES.map(([id, label]) => [id, label]);
 const SYS_USER_LABELS = { creator: 'จัดการได้ทั้งหมด', executive: 'ผู้บริหาร', admin_of: 'ผู้ดูแลระบบ' };
 
@@ -49,15 +49,15 @@ function columnControl(table, column, value) {
 }
 
 // Pick ระบบ → งาน / กิจกรรม → ตาราง (ผู้ใช้กำหนด 2026-10-29). A table's unit comes from its name (mt_<key>_* / tx_<key>_*).
-// Only the 5S tables are here: mt_main_* (employees, cost centers, accounts) are edited in TSAT4 SMF.
-const SYS_GROUPS = [['activity', 'ระบบกิจกรรม']];
-const sysUnitsOf = () => ACTIVITIES.map(([id, label]) => [id, label]);
+// mt_main_* = ข้อมูลกลาง (ระบบตั้งค่า), mt_5s_* / tx_5s_* = 5S.
+const SYS_GROUPS = [['setting', 'ระบบตั้งค่า'], ['activity', 'ระบบกิจกรรม']];
+const sysUnitsOf = (group) => (group === 'activity' ? ACTIVITIES.map(([id, label]) => [id, label]) : [['main', 'ข้อมูลกลาง']]);
 function sysUnitOf(name) {
-  const key = (/^(?:mt|tx|v)_([a-z0-9]+)_/.exec(name) || [])[1] || '';
+  const key = (/^(?:mt|tx|v)_([a-z0-9]+)_/.exec(name) || [])[1] || 'main';
   const act = ACTIVITIES.find(([id]) => id.replace(/[^a-z0-9]/g, '') === key);
-  return act ? ['activity', act[0]] : ['', ''];
+  return act ? ['activity', act[0]] : ['setting', 'main'];
 }
-const sysPick = { group: 'activity', unit: '5s', table: '' };
+const sysPick = { group: 'setting', unit: 'main', table: '' };
 
 async function renderSystem(target) {
   const catalog = await api('/api/system/tables');

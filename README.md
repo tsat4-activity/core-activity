@@ -1,7 +1,7 @@
 # TSAT4 5S
 
 ระบบกิจกรรม 5S (Dashboard · ตรวจพื้นที่และ Issue · ทีม · แผนงาน · พื้นที่ · Checklist · แผนตรวจ · ปฏิทิน)
-แยกออกมาจาก TSAT4 SMF เมื่อ 2026-10-30 · ใช้ Supabase ชุดเดียวกับ TSAT4 SMF ข้อมูล 5S จึงเห็นตรงกันทั้งสองแอป
+แยกออกมาจาก TSAT4 SMF เมื่อ 2026-10-30 · มี Render และ Supabase ของตัวเอง
 
 ## เทคโนโลยี
 
@@ -9,27 +9,38 @@
 - Supabase ผ่าน `@supabase/supabase-js` ฝั่งเซิร์ฟเวอร์เท่านั้น
 - Render (Web Service) deploy อัตโนมัติเมื่อ push ขึ้น `main`
 
-## ติดตั้งบน Render
+## ติดตั้งครั้งแรก
+
+### 1. Supabase
+
+1. สร้างโปรเจกต์ใหม่ใน Supabase
+2. เปิด **SQL Editor → New query** วางเนื้อหาไฟล์ `db/setup.sql` ทั้งไฟล์ แล้วกด **Run** (รันซ้ำได้)
+3. **Project Settings → API Keys** จด Project URL และ secret key ไว้ใส่ใน Render (ห้ามส่งในแชทหรือใส่ใน git)
+
+### 2. Render
 
 1. New → Web Service → เลือก repo นี้ (หรือ New → Blueprint ใช้ `render.yaml`)
-2. Build `npm install` · Start `npm start` · Environment `NODE_VERSION=22`
-3. ใส่ Environment ตาม `.env.example` (ค่าเดียวกับ TSAT4 SMF ยกเว้น `SESSION_SECRET` ให้สุ่มใหม่):
-   `MX_SUPABASE_URL`, `MX_SUPABASE_SECRET_KEY`, `TX_SUPABASE_URL`, `TX_SUPABASE_SECRET_KEY`, `SESSION_SECRET`
+2. Build `npm install` · Start `npm start`
+3. Environment (ดู `.env.example`):
+   - `NODE_VERSION` = `22`
+   - `MX_SUPABASE_URL` และ `TX_SUPABASE_URL` = Project URL (ค่าเดียวกัน)
+   - `MX_SUPABASE_SECRET_KEY` และ `TX_SUPABASE_SECRET_KEY` = secret key (ค่าเดียวกัน)
+   - `SESSION_SECRET` = ข้อความสุ่มยาว ๆ
+   - `BOOTSTRAP_EMPLOYEE_ID` = `2102899` และ `BOOTSTRAP_PASSWORD` = รหัสผ่านแรก (อย่างน้อย 8 ตัว)
 4. เปิด `/api/health` ต้องได้ `{"ok":true,"database":true}`
+5. login ด้วย `2102899` + รหัสผ่านแรก → Setting → `mt_main_employee` แก้ชื่อตัวเอง แล้วเพิ่มหน่วยงาน (`mt_main_costcenter`) พนักงาน และบัญชี (`mt_main_user`)
+6. หลัง login ได้แล้ว ลบ `BOOTSTRAP_PASSWORD` ออกจาก Render ได้
 
-ไม่ต้องรัน SQL เพิ่ม ตาราง 5S มีอยู่แล้วใน Tx Data (`db/act/5s*.sql` เก็บไว้อ้างอิง)
+### 3. ตั้งค่า 5S
 
-## ข้อมูลที่เป็นของ TSAT4 SMF
-
-พนักงาน, costcenter และบัญชีเข้าสู่ระบบ (`mt_main_*` ใน Mx Data) แก้ที่ TSAT4 SMF เท่านั้น แอปนี้อ่านอย่างเดียว
-ให้ใครเป็นผู้ดูแล 5S ทุกปี: TSAT4 SMF > Setting > `mt_main_user` > ผู้ดูแลระบบ ติ๊ก 5S · หรือใส่เป็น เลขา ในทีม 5S ของปีนั้น
+5S → Setting: ทีม (เลขา = ผู้ดูแลปีนั้น) → แผนงาน → พื้นที่ → หัวข้อตรวจ → แผนตรวจ
 
 ## พัฒนา
 
 ```
 npm install
 npm run check      # ตรวจ syntax, route, เปิดเซิร์ฟเวอร์
-npm run test:act   # ทดสอบตาราง 5S บน Postgres จำลอง
+npm run test:act   # ทดสอบ db/setup.sql และตาราง 5S บน Postgres จำลอง
 npm start
 ```
 

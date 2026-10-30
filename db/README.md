@@ -1,11 +1,13 @@
-# db/ — SQL ของตาราง 5S (อ้างอิง)
+# db/ — SQL ที่รันเองใน Supabase
 
-ตารางทั้งหมดสร้างไว้แล้วใน **Tx Data** ซึ่งใช้ร่วมกับ TSAT4 SMF ไม่ต้องรันซ้ำ · AI ไม่มีสิทธิ์เข้าฐานข้อมูล ผู้ใช้รันเองใน SQL Editor
+AI ไม่มีสิทธิ์เข้าฐานข้อมูล ผู้ใช้รันไฟล์ใน SQL Editor ของ Supabase เอง
 
-| ไฟล์ | ฐาน | ใช้ทำอะไร |
-|---|---|---|
-| `act/5s.sql` | **Tx Data** | ตาราง 5S ทั้งชุด สร้างจาก `scripts/act-sql.js` เท่านั้น ห้ามแก้มือ รันซ้ำได้ |
-| `act/5s_task.sql` | **Tx Data** | เพิ่ม Project Planner (`mt_5s_task` + `done_on`) และคัดลอกแผน Gantt เดิมครั้งเดียว |
-| `act/5s_team_roles.sql` | **Tx Data** | บทบาท `advisor` (ที่ปรึกษา) ใน `mt_5s_team` · รันซ้ำได้ |
+| ไฟล์ | ใช้ทำอะไร |
+|---|---|
+| `setup.sql` | **ฐานว่าง รันไฟล์นี้ไฟล์เดียว** = `00_main.sql` + `act/5s.sql` (สร้างด้วย `node scripts/setup-sql.js` ห้ามแก้มือ) รันซ้ำได้ |
+| `00_main.sql` | ตารางกลาง `mt_main_employee`, `mt_main_costcenter`, `mt_main_user` + รหัสผู้ดูแลแรก 2102899 |
+| `act/5s.sql` | ตาราง 5S ทั้งชุด + bucket `img_5s` สร้างจาก `scripts/act-sql.js` เท่านั้น ห้ามแก้มือ |
+| `act/5s_task.sql` | สำหรับฐาน 5S เก่าที่ยังไม่มี Project Planner (ฐานใหม่ไม่ต้องใช้) |
+| `act/5s_team_roles.sql` | สำหรับฐาน 5S เก่าที่ยังไม่มีบทบาท `advisor` (ฐานใหม่ไม่ต้องใช้) |
 
-เปลี่ยนแม่แบบ: แก้ `scripts/act-sql.js` → `node scripts/act-sql.js 5s` → `npm run test:act` · **ตกลงกับฝั่ง TSAT4 SMF ก่อน** เพราะใช้ตารางเดียวกัน
+เปลี่ยนแม่แบบ: แก้ `scripts/act-sql.js` → `node scripts/act-sql.js 5s` → `node scripts/setup-sql.js` → `npm run test:act`

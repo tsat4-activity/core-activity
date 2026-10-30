@@ -2,8 +2,7 @@ import { fail } from './http.js';
 
 export const CREATOR_ID = '2102899';
 export const ROLE_RANK = { viewer: 1, user: 2, admin: 3 };
-// mt_main_user.admin_of ids. The account tables are owned by TSAT4 SMF (same Mx Data) and are not editable here,
-// so this list is only what this app reads (5S admin = '5s' in admin_of).
+// mt_main_user.admin_of: the activities one account administers every year (ids as in public/js/units.js).
 export const ADMIN_SCOPES = ['5s'];
 
 // moduleId -> member table (employee_id, department, role, status). Filled by defineModule().
