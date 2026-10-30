@@ -5,7 +5,7 @@ import { accessOf, actRoute, dateOf, fetchAll, must, namesOf, requireAdmin, tabl
 // Project Planner (100P, 5S): one year's plan as main items (parent_id null) with sub items, shown as a Gantt with
 // year (W1–W4) and month (day) views. Everyone reads; the year's admins create, edit, drag and delete.
 // Table: mt_<act>_task (scripts/act-sql.js). A main item with sub items takes its dates and % from them.
-export const PLANNER_ON = ['5s'];
+export const PLANNER_ON = ['5s', 'smf'];
 // A running activity got the Planner table from an add-on file; a new one gets it with its tables.
 const PLANNER_SQL = { '5s': 'db/act/5s_task.sql' };
 const COLORS = Array.from({ length: 12 }, (_, i) => `p${i + 1}`); // act-planner.js APL_COLORS

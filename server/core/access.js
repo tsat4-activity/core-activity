@@ -3,7 +3,7 @@ import { fail } from './http.js';
 export const CREATOR_ID = '2102899';
 export const ROLE_RANK = { viewer: 1, user: 2, admin: 3 };
 // mt_main_user.admin_of: the activities one account administers every year (ids as in public/js/units.js).
-export const ADMIN_SCOPES = ['5s', 'cfo'];
+export const ADMIN_SCOPES = ['5s', 'cfo', 'smf'];
 
 // moduleId -> member table (employee_id, department, role, status). Filled by defineModule().
 export const MEMBER_TABLES = {};

@@ -1,7 +1,8 @@
 // ระบบกิจกรรม > <activity> > Setting: Project Planner (server: server/modules/act/planner.js).
 // Main items with sub items on a Gantt: year view = 12 months × W1–W4 (longer when items run into next year), month view = days. The year's admins
 // drag bars (whole bar = move, edge = resize), add rows with +, and create / edit / delete. Others read only.
-// 5S: a tab inside Setting (edit) and Dashboard (read only), see act-5s.js.
+// SMF: its own Dashboard / Setting pages (APL_ON). 5S: a tab inside Setting (edit) and Dashboard (read only), see act-5s.js.
+const APL_ON = ['smf'];
 // Main item colours (ผู้ใช้ขอเพิ่ม 2026-10-29: 5 → 12); keys are stored in mt_<act>_task.color, server COLORS lists the same keys.
 const APL_COLORS = {
   p1: '#ec6f73', p2: '#3fbfbf', p3: '#e3a52f', p4: '#8b6fd8', p5: '#4b8bea', p6: '#2fa36b',
@@ -400,4 +401,87 @@ function aplOpenForm(activity, tasks, task, parentId, rerender) {
   syncDone();
   a5EmployeeSearch(activity, (p) => { ownerId = p.employeeId; }, aplYear);
   $('a5-emp-q').closest('.search-block').addEventListener('pick-clear', () => { ownerId = ''; });
+}
+
+const APL_DASH_TABS = { schedule: 'Schedule', team: 'Team' };
+const APL_SET_TABS = { team: 'ทีม', plan: 'แผนงาน' };
+const APL_ROLE_LABEL = { ...ACT_TEAM_ROLES, auditor: 'ผู้ตรวจประเมิน' };
+// Team per activity (ผู้ใช้กำหนด 2026-10-29, docs/specs/act-teams.md); others use APL_ROLE_LABEL.
+// SMF = Smart Factory: Smart Team manages Setting (server accessOf), ที่ปรึกษา views.
+const APL_ROLE_LABELS = { smf: { chairman: 'ประธาน', vice: 'รองประธาน', advisor: 'ที่ปรึกษา', smart: 'Smart Team', member: 'ตัวแทนหน่วยงาน' } };
+const aplRolesOf = (activity) => APL_ROLE_LABELS[activity] || APL_ROLE_LABEL;
+const aplDashTab = {};
+const aplSetTab = {};
+
+async function aplDashboard(target, activity) {
+  const me = await a5Api(activity, `me?year=${a5Year}`);
+  const tab = aplDashTab[activity] || 'schedule';
+  target.innerHTML = `<div class="view-body"><section class="card">
+    ${pageBar(a5Seg('data-apldash', APL_DASH_TABS, tab), `<div class="a5-year">${a5YearSelect(me.years)}</div>`, 'a5')}
+    <div id="a5-body"><div class="empty">กำลังโหลด...</div></div>
+  </section></div>`;
+  const rerender = () => aplDashboard(target, activity).catch(onErr);
+  target.querySelectorAll('[data-apldash]').forEach((node) => {
+    node.onclick = () => { aplDashTab[activity] = node.dataset.apldash; rerender(); };
+  });
+  if ($('a5-year')) $('a5-year').onchange = () => { a5Year = Number($('a5-year').value); rerender(); };
+  const body = $('a5-body');
+  if (tab === 'team') return aplDrawTeam(body, activity, me.access.admin);
+  return aplRender(body, activity, { inPage: true, readOnly: true });
+}
+
+async function aplDrawTeam(body, activity, admin) {
+  let data;
+  try {
+    data = await a5Api(activity, `team?year=${a5Year}`);
+  } catch (err) {
+    body.innerHTML = `<p class="empty">${esc(err.message)}</p>`;
+    return;
+  }
+  const active = (data.members || []).filter((m) => m.status === 'Active');
+  const person = (m) => `<div class="a5-person">${esc(m.employee_id)} · ${esc(m.name || '-')}<span>${esc(m.department || (m.team ? `ทีม ${m.team}` : ''))}</span></div>`;
+  const actName = actLabel(activity);
+  body.innerHTML = `
+    ${admin ? `<div class="action-bar a5-actions">${button('apl-team-edit', 'แก้ไขทีม')}</div>` : ''}
+    <div class="a5-team-grid">${Object.entries(aplRolesOf(activity)).map(([role, label], i) => {
+      const list = active.filter((m) => m.role === role);
+      if (!list.length && (role === 'auditor' || (role === 'member' && !active.some((m) => m.role === 'member')))) return '';
+      return `<div class="a5-team" style="--team:${CHART.series[i % CHART.series.length]}"><div class="a5-team-head">${esc(label)}<span>${list.length} คน</span></div>${list.map(person).join('') || '<div class="a5-person">-</div>'}</div>`;
+    }).join('')}</div>
+    <p class="sum-meta">โครงสร้างทีม ${esc(actName)} ปี ${a5Year} · ${active.length} คน</p>`;
+  a5Lift(body);
+  if (admin && $('apl-team-edit')) $('apl-team-edit').onclick = () => {
+    aplSetTab[activity] = 'team';
+    openView(`${activity}-setting`);
+  };
+}
+
+async function aplSetting(target, activity) {
+  const me = await a5Api(activity, `me?year=${a5Year}`);
+  const admin = me.access.admin;
+  const tab = aplSetTab[activity] || 'team';
+  target.innerHTML = `<div class="view-body"><section class="card">
+    ${pageBar(a5Seg('data-aplset', APL_SET_TABS, tab), `<div class="a5-year">${a5YearSelect(me.years)}</div>`, 'a5')}
+    <div id="a5-body"><div class="empty">กำลังโหลด...</div></div>
+  </section></div>`;
+  const rerender = () => aplSetting(target, activity).catch(onErr);
+  target.querySelectorAll('[data-aplset]').forEach((node) => {
+    node.onclick = () => { aplSetTab[activity] = node.dataset.aplset; rerender(); };
+  });
+  if ($('a5-year')) $('a5-year').onchange = () => { a5Year = Number($('a5-year').value); rerender(); };
+  const body = $('a5-body');
+  if (tab === 'team') {
+    try {
+      return await a5SetTeam(body, activity, admin, rerender, aplRolesOf(activity));
+    } catch (err) {
+      body.innerHTML = `<p class="empty">${esc(err.message)}</p>`;
+      return;
+    }
+  }
+  return aplRender(body, activity, { inPage: true });
+}
+
+for (const id of APL_ON) {
+  VIEWS[`${id}-home`] = (target) => aplDashboard(target, id);
+  VIEWS[`${id}-setting`] = (target) => aplSetting(target, id);
 }

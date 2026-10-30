@@ -5,7 +5,7 @@ const CHOICES = {
   level: ['S1', 'S2', 'S3', 'T1', 'T2', 'T3', 'T6', 'T7', 'T8', 'M1', 'M2', 'M3', 'G1', 'G2', 'G3'],
   prefix: ['นาย', 'นาง', 'นางสาว', 'Mr.', 'Mrs.', 'Ms.'],
   areatype: ['โรงงาน', 'สำนักงาน'],
-  actrole: ['admin', 'chairman', 'vice', 'advisor', 'auditor', 'owner', 'member']
+  actrole: ['admin', 'chairman', 'vice', 'advisor', 'smart', 'auditor', 'owner', 'member']
 };
 
 TITLES.system = ['Setting', 'ตารางทั้งระบบ'];

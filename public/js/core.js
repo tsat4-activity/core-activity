@@ -474,6 +474,7 @@ async function renderMain(target) {
   modulePage(target, 'TSAT4 Activity', 'เลือกกิจกรรมที่ต้องการเข้า', [
     ['5s', 'event', '5S', 'Dashboard, Transaction, Setting'],
     ['cfo', 'eco', 'CFO', 'Carbon Footprint for Organization'],
+    ['smf', 'precision_manufacturing', 'SMF', 'Smart Factory: ทีมและแผนงาน'],
     ['act-plan', 'calendar_month', 'ปฏิทิน', 'แผนของทุกกิจกรรม รายสัปดาห์ เดือน และปี']
   ]);
 }

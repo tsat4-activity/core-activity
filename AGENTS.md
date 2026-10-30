@@ -7,7 +7,7 @@ TSAT4 Activity = ระบบกิจกรรม 5S และ CFO เว็บ
 
 - Supabase โปรเจกต์เดียว (activity01) เก็บตารางกลาง `mt_main_*` (พนักงาน, หน่วยงาน, บัญชี login) + ตาราง 5S `mt_5s_*` / `tx_5s_*` + CFO `mt_cfo_*` / `tx_cfo_*` + bucket `img_5s`, `img_cfo`
   env `MX_SUPABASE_*` และ `TX_SUPABASE_*` ใส่ค่าเดียวกัน (โค้ดยังแยก client `mx` / `tx` ไว้ เผื่อแยกฐานภายหลัง)
-- ตั้งฐานใหม่: `db/setup.sql` (= `db/00_main.sql` + `db/act/5s.sql` + `db/act/cfo.sql` สร้างด้วย `node scripts/setup-sql.js`)
+- ตั้งฐานใหม่: `db/setup.sql` (= `db/00_main.sql` + `db/act/5s.sql` + `db/act/cfo.sql` + `db/act/smf.sql` สร้างด้วย `node scripts/setup-sql.js`)
 - เพิ่มกิจกรรมใหม่: ตาราง `node scripts/act-sql.js <id>` → เพิ่มใน setup-sql.js · server `server/modules/act/<id>.js` + `ACTIVITIES` (common.js) + `ADMIN_SCOPES` · หน้าเว็บ `public/js/act-<id>.js` + `ACTIVITIES` (units.js) + `<script>` ใน index.html
 - ไม่ผูกกับ TSAT4 SMF แล้ว: ข้อมูลไม่ใช้ร่วมกัน · ถ้าจะรับ-ส่งข้อมูลกับระบบอื่นให้ทำตามมาตรฐานร่วม (view `share_*` + คีย์อ่านอย่างเดียว)
 - deploy: push ขึ้น `main` → Render deploy อัตโนมัติ

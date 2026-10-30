@@ -1,7 +1,8 @@
-// Unit catalog: the activities of this app (5S pages in act-5s.js, CFO pages in act-cfo.js).
+// Unit catalog: the activities of this app (5S pages in act-5s.js, CFO in act-cfo.js, SMF in act-planner.js).
 const ACTIVITIES = [
   ['5s', '5S', 'event'],
-  ['cfo', 'CFO', 'event']
+  ['cfo', 'CFO', 'event'],
+  ['smf', 'SMF', 'event']
 ];
 const PLANT_PAGES = [
   ['home', 'monitoring', 'Dashboard', 'ภาพรวม'],

@@ -1,6 +1,6 @@
 # TSAT4 Activity
 
-ระบบกิจกรรมเว็บเดียว: **5S** (Dashboard · ตรวจพื้นที่และ Issue · ทีม · แผนงาน · พื้นที่ · Checklist · แผนตรวจ) และ **CFO** (Carbon Footprint for Organization: Dashboard · บันทึกรายเดือน · Fr-01 – Fr-04.1) + ปฏิทินรวม
+ระบบกิจกรรมเว็บเดียว: **5S** (Dashboard · ตรวจพื้นที่และ Issue · ทีม · แผนงาน · พื้นที่ · Checklist · แผนตรวจ) และ **CFO** (Carbon Footprint for Organization: Dashboard · บันทึกรายเดือน · Fr-01 – Fr-04.1) และ **SMF** (Smart Factory: ทีม + แผนงาน) + ปฏิทินรวม
 แยกออกมาจาก TSAT4 SMF เมื่อ 2026-10-30 · มี Render และ Supabase ของตัวเอง
 
 ## เทคโนโลยี
@@ -35,6 +35,7 @@
 
 - 5S → Setting: ทีม (ผู้ประสานงาน = ผู้ดูแลปีนั้น) → แผนงาน → พื้นที่ → หัวข้อตรวจ → แผนตรวจ
 - CFO → Setting: ทีม → บริษัท (Fr-01) → EF / กิจกรรมรายหน่วยงาน
+- SMF → Setting: ทีม (Smart Team = ผู้ดูแล) → แผนงาน
 
 ## พัฒนา
 
