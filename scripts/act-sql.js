@@ -379,7 +379,7 @@ create table if not exists public.mt_${k}_team (
 alter table public.mt_${k}_team add column if not exists department text;
 alter table public.mt_${k}_team
   drop constraint if exists mt_${k}_team_role_check,
-  add constraint mt_${k}_team_role_check check (role in ('admin', 'chairman', 'vice', 'advisor', 'smart', 'auditor', 'owner', 'member')),
+  add constraint mt_${k}_team_role_check check (role in ('admin', 'chairman', 'vice', 'advisor', 'smart', 'auditor', 'owner', 'member', 'standard', 'academic', 'pr')),
   drop constraint if exists mt_${k}_team_member_has_dept,
   add constraint mt_${k}_team_member_has_dept check ((role = 'member') = (department is not null)),
   drop constraint if exists mt_${k}_team_unique,
@@ -432,6 +432,7 @@ create table if not exists public.mt_${k}_checklist (
   status text not null default 'Active' check (status in ('Active', 'Inactive')),
   unique (year, item_no)
 );
+
 
 -- แผนตรวจ Committee: พื้นที่ × เดือน × สัปดาห์ (W1 = 1–7, W2 = 8–14, W3 = 15–21, W4 = 22–สิ้นเดือน)
 create table if not exists public.mt_${k}_audit_plan (

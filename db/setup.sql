@@ -96,7 +96,7 @@ create table if not exists public.mt_5s_team (
 alter table public.mt_5s_team add column if not exists department text;
 alter table public.mt_5s_team
   drop constraint if exists mt_5s_team_role_check,
-  add constraint mt_5s_team_role_check check (role in ('admin', 'chairman', 'vice', 'advisor', 'smart', 'auditor', 'owner', 'member')),
+  add constraint mt_5s_team_role_check check (role in ('admin', 'chairman', 'vice', 'advisor', 'smart', 'auditor', 'owner', 'member', 'standard', 'academic', 'pr')),
   drop constraint if exists mt_5s_team_member_has_dept,
   add constraint mt_5s_team_member_has_dept check ((role = 'member') = (department is not null)),
   drop constraint if exists mt_5s_team_unique,
@@ -174,6 +174,7 @@ create table if not exists public.mt_5s_checklist (
   status text not null default 'Active' check (status in ('Active', 'Inactive')),
   unique (year, item_no)
 );
+
 
 -- แผนตรวจ Committee: พื้นที่ × เดือน × สัปดาห์ (W1 = 1–7, W2 = 8–14, W3 = 15–21, W4 = 22–สิ้นเดือน)
 create table if not exists public.mt_5s_audit_plan (
@@ -292,7 +293,7 @@ create table if not exists public.mt_cfo_team (
 alter table public.mt_cfo_team add column if not exists department text;
 alter table public.mt_cfo_team
   drop constraint if exists mt_cfo_team_role_check,
-  add constraint mt_cfo_team_role_check check (role in ('admin', 'chairman', 'vice', 'advisor', 'smart', 'auditor', 'owner', 'member')),
+  add constraint mt_cfo_team_role_check check (role in ('admin', 'chairman', 'vice', 'advisor', 'smart', 'auditor', 'owner', 'member', 'standard', 'academic', 'pr')),
   drop constraint if exists mt_cfo_team_member_has_dept,
   add constraint mt_cfo_team_member_has_dept check ((role = 'member') = (department is not null)),
   drop constraint if exists mt_cfo_team_unique,
@@ -514,7 +515,7 @@ create table if not exists public.mt_smf_team (
 alter table public.mt_smf_team add column if not exists department text;
 alter table public.mt_smf_team
   drop constraint if exists mt_smf_team_role_check,
-  add constraint mt_smf_team_role_check check (role in ('admin', 'chairman', 'vice', 'advisor', 'smart', 'auditor', 'owner', 'member')),
+  add constraint mt_smf_team_role_check check (role in ('admin', 'chairman', 'vice', 'advisor', 'smart', 'auditor', 'owner', 'member', 'standard', 'academic', 'pr')),
   drop constraint if exists mt_smf_team_member_has_dept,
   add constraint mt_smf_team_member_has_dept check ((role = 'member') = (department is not null)),
   drop constraint if exists mt_smf_team_unique,
