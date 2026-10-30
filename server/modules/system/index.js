@@ -4,6 +4,11 @@ import { fail, wrap, cleanTerm, adminWriteError, listFilters } from '../../core/
 import { ADMIN_SCOPES, CREATOR_ID, MEMBER_TABLES, creatorOnly, defineModule } from '../../core/access.js';
 import { requireUser } from '../../core/users.js';
 import { MAIN_TABLES } from '../../core/tables.js';
+import { imageBytes } from '../act/common.js';
+
+// Photo columns (type 'photo', e.g. mt_main_employee.photo 2.5:3): the browser sends a cropped JPEG data URL,
+// stored in this Storage bucket of the table's database (db/00_main.sql) · the column keeps the public link.
+const PHOTO_BUCKET = 'img_main';
 
 const CHOICES = {
   status: ['Active', 'Inactive'],
@@ -54,7 +59,19 @@ function adminValue(column, raw, { insert, current, departments }) {
   return String(raw).trim();
 }
 
-async function adminPayload(spec, body, { insert, current = null }) {
+// New photo -> upload and return its link · '' -> null (remove) · not sent -> undefined (unchanged) · bad -> { error }.
+async function photoValue(raw, { client, table, rowId }) {
+  if (raw === undefined) return undefined;
+  if (raw === null || raw === '') return null;
+  const bytes = imageBytes(raw);
+  if (!bytes) return { error: 'รูปต้องเป็น JPEG ไม่เกิน 700 KB' };
+  const key = `${table}/${String(rowId).replace(/[^A-Za-z0-9_-]/g, '_')}-${Date.now()}.jpg`;
+  const uploaded = await client.storage.from(PHOTO_BUCKET).upload(key, new Uint8Array(bytes), { contentType: 'image/jpeg', upsert: false });
+  if (uploaded.error) return { error: `อัปโหลดรูปไม่ได้ (ต้องมี bucket ${PHOTO_BUCKET}: รัน db/00_main.sql)` };
+  return client.storage.from(PHOTO_BUCKET).getPublicUrl(key).data.publicUrl;
+}
+
+async function adminPayload(spec, body, { insert, current = null, photo = null }) {
   const out = {};
   const departments = spec.columns.some((column) => column.type === 'dept') ? await departmentsOf() : [];
   for (const column of spec.columns) {
@@ -64,6 +81,12 @@ async function adminPayload(spec, body, { insert, current = null }) {
       if (password === null) return { error: 'รหัสผ่านต้องมีอย่างน้อย 8 ตัว' };
       if (password) out.password_hash = await bcrypt.hash(password, 10);
       if (password && !insert) out.password_changed_at = new Date().toISOString();
+      continue;
+    }
+    if (column.type === 'photo') {
+      const value = photo ? await photoValue(body[column.name], photo) : undefined;
+      if (value?.error) return value;
+      if (value !== undefined) out[column.name] = value;
       continue;
     }
     const value = adminValue(column, body[column.name], { insert, current, departments });
@@ -126,7 +149,7 @@ export default defineModule({
       const filters = listFilters(req);
       for (const column of spec.columns) {
         const term = cleanTerm(filters[column.name]);
-        if (!term || !readable.includes(column.name) || column.type === 'scopes') continue;
+        if (!term || !readable.includes(column.name) || column.type === 'scopes' || column.type === 'photo') continue;
         if (['int', 'qty', 'money'].includes(column.type)) {
           const n = Number(term);
           if (Number.isFinite(n)) query = query.eq(column.name, n);
@@ -149,7 +172,8 @@ export default defineModule({
       const opened = open(req.params.name);
       if (!opened) return fail(res, 404, 'ไม่พบตาราง');
       const { spec, client } = opened;
-      const { out, error: invalid } = await adminPayload(spec, req.body || {}, { insert: true });
+      const photo = { client, table: req.params.name, rowId: req.body?.[spec.pk[0]] };
+      const { out, error: invalid } = await adminPayload(spec, req.body || {}, { insert: true, photo });
       if (invalid) return fail(res, 400, invalid);
       if (req.params.name === 'mt_main_user') {
         const employee = await client.from('mt_main_employee').select('status').eq('employee_id', out.employee_id).maybeSingle();
@@ -175,7 +199,8 @@ export default defineModule({
         for (const column of spec.pk) read = read.eq(column, key[column]);
         current = (await read.maybeSingle()).data || null;
       }
-      const { out, error: invalid } = await adminPayload(spec, req.body?.values || {}, { insert: false, current });
+      const photo = { client, table: req.params.name, rowId: key[spec.pk[0]] };
+      const { out, error: invalid } = await adminPayload(spec, req.body?.values || {}, { insert: false, current, photo });
       if (invalid) return fail(res, 400, invalid);
       if (req.params.name === 'mt_main_user' && String(key.employee_id) === CREATOR_ID && out.creator === false) return fail(res, 400, 'ปิดผู้สร้างระบบไม่ได้');
       if (memberTables.has(req.params.name) && String(key.employee_id) === CREATOR_ID && (out.role && out.role !== 'admin' || out.status === 'Inactive')) return fail(res, 400, 'ผู้สร้างระบบเป็น Admin เสมอ');

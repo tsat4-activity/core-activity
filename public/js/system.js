@@ -26,10 +26,46 @@ function cellText(column, value) {
   return value ?? '';
 }
 
+// Table cell: a photo column shows its thumbnail (hover zooms, ZOOM_THUMBS), the rest plain text.
+function cellHtml(column, value) {
+  if (column.type === 'photo') return value ? `<img class="sys-photo img-zoom" src="${esc(value)}" alt="" loading="lazy">` : '';
+  return esc(cellText(column, value));
+}
+
+// Photo field (mt_main_employee.photo, ผู้ใช้กำหนด 2026-10-30: อัตราส่วน 2.5:3): the picked file is cropped in the
+// browser to 500×600 JPEG and kept in data-new until save; the server uploads it (Storage img_main) and stores the link.
+function photoControl(id, label, value) {
+  return `<div class="field">${label}<div class="sys-photo-edit">
+    <img id="${id}-view" class="sys-photo is-large" src="${esc(value || '')}" alt=""${value ? '' : ' hidden'}>
+    <div class="sys-photo-actions">
+      <input id="${id}" type="file" accept="image/*" data-new="">
+      ${value ? `<label class="check"><input id="${id}-remove" type="checkbox"> ลบรูป</label>` : ''}
+      <span class="sum-meta">ครอปเป็น 2.5 : 3 อัตโนมัติ</span>
+    </div>
+  </div></div>`;
+}
+
+function bindPhotoControl(id) {
+  const input = $(id);
+  if (!input) return;
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    input.dataset.new = '';
+    if (!file) return;
+    try {
+      input.dataset.new = await cropJpeg(file, 500, 600);
+      $(`${id}-view`).src = input.dataset.new;
+      $(`${id}-view`).hidden = false;
+      if ($(`${id}-remove`)) $(`${id}-remove`).checked = false;
+    } catch (err) { onErr(err); }
+  };
+}
+
 function columnControl(table, column, value) {
   const id = `sys-${column.name}`;
   const label = columnLabel(table, column);
   if (column.type === 'password') return field(label, `<input id="${id}" type="password" autocomplete="new-password">`);
+  if (column.type === 'photo') return photoControl(id, label, value);
   if (column.type === 'bool') return field(label, `<select id="${id}"><option value="false">false</option><option value="true"${value ? ' selected' : ''}>true</option></select>`);
   if (column.type === 'scopes') {
     const on = Array.isArray(value) ? value : [];
@@ -111,7 +147,7 @@ async function renderSystem(target) {
     countText('sys-count', state.rows.length, data.total);
     setPager('sys', state.offset, data.total);
     const visible = table.columns.filter((column) => column.type !== 'password');
-    fillTable('sys-rows', visible.map((column) => ({ label: columnLabel(table, column), key: column.name })), state.rows.map((row, index) => `<tr data-pick="${index}">${visible.map((column) => `<td>${esc(cellText(column, row[column.name]))}</td>`).join('')}</tr>`).join(''), 'ไม่มีแถว', columnHead());
+    fillTable('sys-rows', visible.map((column) => ({ label: columnLabel(table, column), key: column.name })), state.rows.map((row, index) => `<tr data-pick="${index}">${visible.map((column) => `<td>${cellHtml(column, row[column.name])}</td>`).join('')}</tr>`).join(''), 'ไม่มีแถว', columnHead());
     bindRowSelect($('sys-rows'), (pick) => {
       state.selected = state.rows[Number(pick)];
       $('sys-edit').disabled = false;
@@ -127,6 +163,12 @@ async function renderSystem(target) {
       if (!input || input.disabled) continue;
       if (column.type === 'password') { if (input.value) values.password = input.value; continue; }
       if (column.type === 'scopes') { values[column.name] = [...input.querySelectorAll('input:checked')].map((box) => box.value); continue; }
+      // photo: a new picture (data URL) or '' to remove; untouched = not sent
+      if (column.type === 'photo') {
+        if (input.dataset.new) values[column.name] = input.dataset.new;
+        else if ($(`sys-${column.name}-remove`)?.checked) values[column.name] = '';
+        continue;
+      }
       values[column.name] = column.type === 'bool' ? input.value === 'true' : input.value;
     }
     if (state.editing) {
@@ -152,6 +194,7 @@ async function renderSystem(target) {
       ? (state.editing ? 'แก้ไขสิทธิ์จัดการระบบ' : 'เพิ่มสิทธิ์จัดการระบบ')
       : `${state.editing ? 'แก้ไขแถว' : 'เพิ่มแถว'} ${esc(table.name)}`;
     openPopup(title, fields, saveRow);
+    table.columns.filter((column) => column.type === 'photo').forEach((column) => bindPhotoControl(`sys-${column.name}`));
   };
   const reset = () => { state.offset = 0; head.sort = ''; head.dir = 'asc'; head.filters = {}; state.editing = null; closePopup(); loadRows().catch(onErr); };
   $('sys-group').onchange = () => { sysPick.group = $('sys-group').value; fillUnits(); fillTables(); reset(); };

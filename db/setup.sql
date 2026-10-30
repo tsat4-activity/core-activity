@@ -57,6 +57,19 @@ create trigger mt_main_user_expiry before insert or update on public.mt_main_use
 create index if not exists mt_main_employee_department_idx on public.mt_main_employee (department);
 create index if not exists mt_main_costcenter_department_idx on public.mt_main_costcenter (department);
 
+-- รูปพนักงาน อัตราส่วน 2.5 : 3 (ผู้ใช้กำหนด 2026-10-30) · เก็บลิงก์รูปใน Storage bucket img_main · เพิ่มทีหลัง จึงใช้ add column (รันซ้ำได้)
+alter table public.mt_main_employee add column if not exists photo text;
+
+-- ที่เก็บรูปของตารางกลาง (Supabase Storage) ชื่อ img_main · รูป JPEG ≤ 700 KB เปิดดูได้ด้วยลิงก์
+-- ข้ามไปเองถ้าฐานไม่มี storage (เช่นตอนทดสอบด้วย PGlite)
+do $$ begin
+  if to_regclass('storage.buckets') is not null then
+    insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+    values ('img_main', 'img_main', true, 716800, array['image/jpeg'])
+    on conflict (id) do nothing;
+  end if;
+end $$;
+
 -- Only the server (service key) reads these tables; the browser never does.
 alter table public.mt_main_costcenter enable row level security;
 alter table public.mt_main_employee enable row level security;

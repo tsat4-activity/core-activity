@@ -34,6 +34,7 @@ ok(fs.readFileSync(path.join(ROOT, 'db', 'setup.sql'), 'utf8') === setupSql(), '
   ok((await one(fresh, `select (password_expires_at = '2026-05-02T00:00:00Z'::timestamptz) ok from mt_main_user`)).ok, 'setup.sql: changing the password moves the expiry');
   ok(await throws(fresh, `insert into mt_main_user (employee_id, password_hash) values ('nobody', 'x')`), 'setup.sql: a login needs an employee');
   ok(await throws(fresh, `insert into mt_main_employee (employee_id, first_name, last_name, level) values ('9', 'a', 'b', 'X9')`), 'setup.sql: level from the list only');
+  ok((await one(fresh, `select count(*)::int n from information_schema.columns where table_name = 'mt_main_employee' and column_name = 'photo'`)).n === 1, 'setup.sql: employee photo column (2.5:3 link in Storage img_main)');
   await fresh.close();
 }
 

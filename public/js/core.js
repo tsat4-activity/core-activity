@@ -30,25 +30,21 @@ function field(label, control, extra = '') {
   return `<label class="field${extra ? ` ${extra}` : ''}">${label}${control}</label>`;
 }
 
-function squareJpeg(file) {
+// A picked image file -> JPEG data URL of width × height, cropped from the centre to that ratio (e.g. 500 × 600 = 2.5 : 3).
+function cropJpeg(file, width, height) {
   return new Promise((resolve, reject) => {
     const image = new Image();
     const url = URL.createObjectURL(file);
     image.onload = () => {
-      const size = 512;
       const canvas = document.createElement('canvas');
-      canvas.width = size;
-      canvas.height = size;
-      const side = Math.min(image.width, image.height);
-      canvas.getContext('2d').drawImage(image, (image.width - side) / 2, (image.height - side) / 2, side, side, 0, 0, size, size);
+      canvas.width = width;
+      canvas.height = height;
+      const scale = Math.min(image.width / width, image.height / height);
+      const sw = width * scale;
+      const sh = height * scale;
+      canvas.getContext('2d').drawImage(image, (image.width - sw) / 2, (image.height - sh) / 2, sw, sh, 0, 0, width, height);
       URL.revokeObjectURL(url);
-      canvas.toBlob((blob) => {
-        if (!blob) return reject(new Error('จัดรูปไม่ได้'));
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result || ''));
-        reader.onerror = () => reject(new Error('อ่านรูปไม่ได้'));
-        reader.readAsDataURL(blob);
-      }, 'image/jpeg', 0.75);
+      resolve(canvas.toDataURL('image/jpeg', 0.8));
     };
     image.onerror = () => { URL.revokeObjectURL(url); reject(new Error('เปิดรูปไม่ได้')); };
     image.src = url;
