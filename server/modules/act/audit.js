@@ -301,34 +301,44 @@ export function mountAudit(app) {
     res.json({ ok: true });
   });
 
+  // Where one team row sits: role + sub-team + audit group / area / department, checked the same way for add and edit.
+  const placementOf = (activity, body) => {
+    const role = ROLES.includes(body?.role) ? body.role : '';
+    const units = ACT_UNITS[activity] || [];
+    if (body?.unit && !units.includes(body.unit)) return { error: 'ทีมย่อยไม่ถูกต้อง' };
+    // owner / auditor always sit in ทีมตรวจประเมิน when the activity has sub-teams
+    const unit = units.length && AUDIT_ONLY.includes(role) ? AUDIT_UNIT : units.includes(body?.unit) ? body.unit : null;
+    const team = role === 'auditor' ? String(body?.team || '').trim().toUpperCase() : null;
+    const areaId = role === 'owner' && body?.areaId ? Number(body.areaId) : null;
+    const department = role === 'member' && !unit ? String(body?.department || '').trim().slice(0, 80) : '';
+    if (!role) return { error: 'เลือกบทบาท' };
+    if (role === 'auditor' && !/^[A-Z]$/.test(team)) return { error: 'ผู้ตรวจต้องเลือกกลุ่มตรวจ A–Z' };
+    if (role === 'owner' && !areaId) return { error: 'ผู้รับผิดชอบพื้นที่ต้องระบุพื้นที่' };
+    if (role === 'member' && !unit && !department) return { error: 'ตัวแทนหน่วยงานต้องระบุหน่วยงาน' };
+    return { role, unit, team, area_id: areaId, department: department || null };
+  };
+
   route('post', '/api/act/:activity/team', async (req, res, activity) => {
     const year = yearOf(req.body?.year);
     if (!year || !(await requireAdmin(req, res, activity, year))) return;
     const employeeId = String(req.body?.employeeId || '').trim();
-    const role = ROLES.includes(req.body?.role) ? req.body.role : '';
-    const team = role === 'auditor' ? String(req.body?.team || '').trim().toUpperCase() : null;
-    const areaId = role === 'owner' && req.body?.areaId ? Number(req.body.areaId) : null;
-    const units = ACT_UNITS[activity] || [];
-    // owner / auditor always sit in ทีมตรวจประเมิน when the activity has sub-teams
-    const unit = units.length && AUDIT_ONLY.includes(role) ? AUDIT_UNIT : units.includes(req.body?.unit) ? req.body.unit : null;
-    if (req.body?.unit && !units.includes(req.body.unit)) return fail(res, 400, 'ทีมย่อยไม่ถูกต้อง');
-    const department = role === 'member' && !unit ? String(req.body?.department || '').trim().slice(0, 80) : '';
-    const targetCount = role === 'member' && req.body?.targetCount != null && req.body.targetCount !== '' ? Math.max(0, Math.floor(Number(req.body.targetCount) || 0)) : undefined;
-    const managerId = role === 'member' && req.body?.managerId ? String(req.body.managerId).trim().slice(0, 20) || null : undefined;
-    if (!employeeId || !role) return fail(res, 400, 'เลือกพนักงานและบทบาท');
-    if (role === 'auditor' && !/^[A-Z]$/.test(team)) return fail(res, 400, 'ผู้ตรวจต้องเลือกทีม A–Z');
-    if (role === 'owner' && !areaId) return fail(res, 400, 'ผู้รับผิดชอบพื้นที่ต้องระบุพื้นที่');
-    if (role === 'member' && !unit && !department) return fail(res, 400, 'ตัวแทนหน่วยงานต้องระบุหน่วยงาน');
-    if (role === 'owner') {
-      await tx.from(tablesOf(activity).team).delete().eq('year', year).eq('area_id', areaId).eq('role', 'owner');
-    }
-    const extra = { ...(areaId ? { area_id: areaId } : {}), ...(department ? { department } : {}), ...(targetCount !== undefined ? { target_count: targetCount } : {}), ...(managerId !== undefined ? { manager_id: managerId } : {}) };
-    const { error } = await tx.from(tablesOf(activity).team).insert({ year, employee_id: employeeId, role, team, ...(unit ? { unit } : {}), ...extra, status: 'Active' });
+    if (!employeeId) return fail(res, 400, 'เลือกพนักงาน');
+    const place = placementOf(activity, req.body);
+    if (place.error) return fail(res, 400, place.error);
+    const member = place.role === 'member';
+    const targetCount = member && req.body?.targetCount != null && req.body.targetCount !== '' ? Math.max(0, Math.floor(Number(req.body.targetCount) || 0)) : undefined;
+    const managerId = member && req.body?.managerId ? String(req.body.managerId).trim().slice(0, 20) || null : undefined;
+    // one owner per area per year: the new one replaces the old
+    if (place.role === 'owner') await tx.from(tablesOf(activity).team).delete().eq('year', year).eq('area_id', place.area_id).eq('role', 'owner');
+    const row = Object.fromEntries(Object.entries(place).filter(([, v]) => v != null));
+    const extra = { ...(targetCount !== undefined ? { target_count: targetCount } : {}), ...(managerId !== undefined ? { manager_id: managerId } : {}) };
+    const { error } = await tx.from(tablesOf(activity).team).insert({ year, employee_id: employeeId, ...row, ...extra, status: 'Active' });
     if (error?.code === '23505') return fail(res, 400, 'คนนี้มีบทบาทนี้อยู่แล้ว');
     throwIf(error);
     res.status(201).json({ ok: true });
   });
 
+  // Edit one row (ผู้ใช้กำหนด 2026-10-30: เพิ่ม แก้ไข ลบ ทุกหน้า): status, and when role is sent, the whole placement.
   route('patch', '/api/act/:activity/team/:id', async (req, res, activity) => {
     const { data: row, error } = await tx.from(tablesOf(activity).team).select('*').eq('id', Number(req.params.id)).maybeSingle();
     throwIf(error);
@@ -336,15 +346,26 @@ export function mountAudit(app) {
     if (!(await requireAdmin(req, res, activity, row.year))) return;
     const patch = {};
     if (req.body?.status) patch.status = req.body.status === 'Inactive' ? 'Inactive' : 'Active';
-    if (row.role === 'member') {
-      if (req.body?.department != null) {
-        const department = String(req.body.department).trim().slice(0, 80);
-        if (!department) return fail(res, 400, 'ตัวแทนหน่วยงานต้องระบุหน่วยงาน');
-        patch.department = department;
+    if (req.body?.role !== undefined) {
+      const place = placementOf(activity, req.body);
+      if (place.error) return fail(res, 400, place.error);
+      const self = String(row.employee_id) === req.user.employeeId && !req.user.creator;
+      if (self && row.role === 'admin' && !row.unit && (place.role !== 'admin' || place.unit || patch.status === 'Inactive')) return fail(res, 400, 'นำสิทธิ์ผู้ประสานงานของตัวเองออกไม่ได้');
+      Object.assign(patch, place);
+      if (place.role === 'owner') {
+        const old = await tx.from(tablesOf(activity).team).delete().eq('year', row.year).eq('area_id', place.area_id).eq('role', 'owner').neq('id', row.id);
+        throwIf(old.error);
       }
+    } else if (row.role === 'member' && req.body?.department != null) {
+      const department = String(req.body.department).trim().slice(0, 80);
+      if (!department && !row.unit) return fail(res, 400, 'ตัวแทนหน่วยงานต้องระบุหน่วยงาน');
+      patch.department = department || null;
+    }
+    if ((patch.role ?? row.role) === 'member') {
       if (req.body?.targetCount != null) patch.target_count = Math.max(0, Math.floor(Number(req.body.targetCount) || 0));
       if (req.body?.managerId !== undefined) patch.manager_id = String(req.body.managerId || '').trim().slice(0, 20) || null;
     }
+    if (!Object.keys(patch).length) return fail(res, 400, 'ไม่มีข้อมูลให้แก้ไข');
     const upd = await tx.from(tablesOf(activity).team).update(patch).eq('id', row.id);
     if (upd.error?.code === '23505') return fail(res, 400, 'คนนี้มีบทบาทนี้อยู่แล้ว');
     throwIf(upd.error);
