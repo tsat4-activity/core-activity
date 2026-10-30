@@ -18,7 +18,7 @@ function tablesForSystem() {
   const out = {};
   for (const activity of new Set([...AUDIT_ON, ...PLANNER_ON, ...CFO_ON])) {
     const t = tablesOf(activity);
-    out[t.team] = { db: 'tx', pk: ['id'], columns: [['id', 'read'], ['year', 'int', true], ['employee_id', 'text', true], ['role', 'actrole', true], ['team', 'text'], ['area_id', 'int'], ['department', 'text'], ['status', 'status', true]] };
+    out[t.team] = { db: 'tx', pk: ['id'], columns: [['id', 'read'], ['year', 'int', true], ['employee_id', 'text', true], ['role', 'actrole', true], ['unit', 'text'], ['team', 'text'], ['area_id', 'int'], ['department', 'text'], ['status', 'status', true]] };
     out[t.setting] = { db: 'tx', pk: ['key'], columns: [['key', 'text', true], ['value', 'text', true]] };
     if (PLANNER_ON.includes(activity)) out[t.task] = { db: 'tx', pk: ['id'], columns: [['id', 'read'], ['year', 'int', true], ['parent_id', 'int'], ['sort_no', 'int', true], ['title', 'text', true], ['start_date', 'date'], ['end_date', 'date'], ['progress', 'int', true], ['owner_id', 'text'], ['color', 'text'], ['note', 'text'], ['created_by', 'read']] };
     if (CFO_ON.includes(activity)) {

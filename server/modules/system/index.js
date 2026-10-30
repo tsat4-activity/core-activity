@@ -17,7 +17,7 @@ const CHOICES = {
   prefix: ['นาย', 'นาง', 'นางสาว', 'Mr.', 'Mrs.', 'Ms.'],
   group: ['Factory', 'Non', 'Center'],
   areatype: ['โรงงาน', 'สำนักงาน'],
-  actrole: ['admin', 'chairman', 'vice', 'advisor', 'smart', 'auditor', 'owner', 'member', 'standard', 'academic', 'pr']
+  actrole: ['admin', 'chairman', 'vice', 'advisor', 'smart', 'auditor', 'owner', 'member']
 };
 
 // Department names come from mt_main_costcenter (there is no department master table on purpose).

@@ -77,6 +77,27 @@ ok(await throws(db, `insert into mt_safety_team (year, employee_id, role, area_i
 await db.exec(`delete from mt_safety_area where code = 'X2'`);
 ok((await one(db, `select count(*)::int n from mt_safety_team where role = 'owner' and employee_id = '7'`)).n === 1, 'deleting an area removes its owner rows');
 ok((await one(db, `select count(*)::int n from mt_5s_setting`)).n === 5, 'settings seeded');
+ok((await one(db, `select value from mt_5s_setting where key = 'issue_due_days_before_next'`)).value === '15', 'Action due 15 days before the next audit');
+// 5S sub-teams (unit): a team member needs no department, a plain member still does, leads have none
+await db.exec(`insert into mt_5s_team (year, employee_id, role, unit) values (2026, '50', 'member', 'standard'), (2026, '50', 'chairman', 'pr'), (2026, '51', 'advisor', null)`);
+ok(true, 'sub-team member without department, team chairman, committee advisor');
+ok(await throws(db, `insert into mt_5s_team (year, employee_id, role) values (2026, '52', 'member')`), 'a member outside a sub-team needs a department');
+ok(await throws(db, `insert into mt_5s_team (year, employee_id, role, unit, department) values (2026, '52', 'chairman', 'pr', 'PD1')`), 'a lead has no department');
+await db.exec(`insert into mt_5s_team (year, employee_id, role, unit) values (2026, '50', 'chairman', 'academic')`);
+ok(true, 'the same person may lead two sub-teams');
+await db.exec(`delete from mt_5s_team where employee_id in ('50', '51')`); // keep the real-data counts below exact
+{
+  // the earlier draft stored the sub-team as the role (standard / academic / pr): 5s.sql moves it to unit
+  const old = new PGlite();
+  await old.exec(`do $$ begin create role anon; create role authenticated; exception when duplicate_object then null; end $$;`);
+  await old.exec(actSql('5s'));
+  await old.exec(`alter table mt_5s_team drop constraint mt_5s_team_role_check; insert into mt_5s_team (year, employee_id, role) values (2026, '60', 'pr'), (2026, '61', 'academic'); update mt_5s_setting set value = '10' where key = 'issue_due_days_before_next'`);
+  await old.exec(actSql('5s'));
+  const r = (await old.query(`select employee_id, role, unit from mt_5s_team order by employee_id`)).rows;
+  ok(r.length === 2 && r.every((x) => x.role === 'member') && r[0].unit === 'pr' && r[1].unit === 'academic', 'old draft roles become members of that sub-team');
+  ok((await one(old, `select value from mt_5s_setting where key = 'issue_due_days_before_next'`)).value === '15', 'the old default 10 days becomes 15');
+  await old.close();
+}
 
 // Project Planner: main items and sub items in one table (every activity has it)
 await db.exec(actSql('100p', { audit: false }));
@@ -195,11 +216,12 @@ if (!fs.existsSync(importFile)) {
     { id: 12, checklist_id: 3, action_description: 'จัดใหม่', after_photos: 1 },
     { id: 13, checklist_id: 4, action_description: 'มีข้อความแต่ไม่มีรูป', after_photos: 0 }
   ];
-  const v = verifyIssues(open, new Map([[1, 5], [2, 4], [3, 3], [4, 5], [5, 5]]));
+  const v = verifyIssues(open, new Map([[1, 5], [2, 4], [3, 2], [4, 5], [5, 5]]));
   const by = Object.fromEntries(v.updates.map((u) => [u.id, u.status]));
   ok(v.scores.get(1) === 0 && by[10] === 'OVERDUE', 'no action -> item 0 + OVERDUE');
   ok(by[11] === 'CLOSED' && v.scores.get(2) === 4, 'action + score 4 -> CLOSED');
-  ok(by[12] === 'OPEN' && v.updates.find((u) => u.id === 12).carry, 'action + score 3 -> carries on');
+  ok(by[12] === 'OPEN' && v.updates.find((u) => u.id === 12).carry, 'action + score 2 (still below 3) -> carries on');
+  ok(verifyIssues([open[2]], new Map([[3, 3]])).updates[0].status === 'CLOSED', 'action + score 3 (no longer below 3) -> CLOSED');
   ok(by[13] === 'OVERDUE' && v.scores.get(4) === 0, 'action text without after photo counts as no action');
   ok(weekStartIso(2026, 10, 3) === '2026-10-15', 'week 3 starts on the 15th');
   const plans = [{ year: 2026, month: 10, week: 1 }, { year: 2027, month: 1, week: 2 }, { year: 2026, month: 9, week: 1 }];

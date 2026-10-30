@@ -114,6 +114,11 @@ export async function namesOf(ids) {
 // What the signed-in user may do in one activity for one year.
 // admin -> Setting · chairman (+ vice) / auditor / area owner / department member -> transaction · everyone -> Dashboard
 // Account level (mt_main_user): creator or admin_of this activity = admin every year · executive = chairman every year.
+// Sub-teams (mt_<act>_team.unit, ผู้ใช้กำหนด 2026-10-30): empty = the activity's committee (ประธาน · รองประธาน ·
+// ที่ปรึกษา · ผู้ประสานงาน). 5S has four teams; ทีมตรวจประเมิน also holds the area owners and the auditors.
+export const ACT_UNITS = { '5s': ['standard', 'academic', 'pr', 'audit'] };
+export const AUDIT_UNIT = 'audit';
+
 export async function accessOf(req, activity, year) {
   const me = req.user.employeeId;
   const t = tablesOf(activity);
@@ -126,9 +131,11 @@ export async function accessOf(req, activity, year) {
   if (team.error) throw team.error;
   const roles = team.data || [];
   const access = {
-    // smart = SMF Smart Team, which runs Smart Factory's Setting (docs/specs/act-smf.md)
-    admin: lead || roles.some((r) => r.role === 'admin' || r.role === 'smart'),
-    chairman: executive || roles.some((r) => r.role === 'chairman' || r.role === 'vice'),
+    // Setting: the committee's ผู้ประสานงาน (admin, no unit) · smart = SMF Smart Team (docs/specs/act-smf.md).
+    // A sub-team's own ผู้ประสานงาน / ประธาน leads that team only, so it does not get these rights.
+    admin: lead || roles.some((r) => (r.role === 'admin' && !r.unit) || r.role === 'smart'),
+    // Committee Audit and Issue rights: the committee's ประธาน / รองประธาน and those of ทีมตรวจประเมิน.
+    chairman: executive || roles.some((r) => (r.role === 'chairman' || r.role === 'vice') && (!r.unit || r.unit === AUDIT_UNIT)),
     advisor: roles.some((r) => r.role === 'advisor'),
     auditor: roles.some((r) => r.role === 'auditor'),
     teams: [...new Set(roles.filter((r) => r.team).map((r) => r.team))],

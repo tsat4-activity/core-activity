@@ -19,13 +19,20 @@ create table if not exists public.mt_cfo_team (
   constraint mt_cfo_team_owner_has_area check ((role = 'owner') = (area_id is not null))
 );
 alter table public.mt_cfo_team add column if not exists department text;
+-- unit = ทีมย่อยของกิจกรรม (ผู้ใช้กำหนด 2026-10-30) · ว่าง = คณะกรรมการกลาง (ประธาน · รองประธาน · ที่ปรึกษา · ผู้ประสานงาน)
+-- 5S: standard ทีมมาตรฐาน · academic ทีมวิชาการ · pr ทีมประชาสัมพันธ์ · audit ทีมตรวจประเมิน (+ ผู้รับผิดชอบพื้นที่ / ผู้ตรวจ) · server ตรวจค่า
+alter table public.mt_cfo_team add column if not exists unit text;
 alter table public.mt_cfo_team
   drop constraint if exists mt_cfo_team_role_check,
-  add constraint mt_cfo_team_role_check check (role in ('admin', 'chairman', 'vice', 'advisor', 'smart', 'auditor', 'owner', 'member', 'standard', 'academic', 'pr')),
   drop constraint if exists mt_cfo_team_member_has_dept,
-  add constraint mt_cfo_team_member_has_dept check ((role = 'member') = (department is not null)),
-  drop constraint if exists mt_cfo_team_unique,
-  add constraint mt_cfo_team_unique unique nulls not distinct (year, employee_id, role, team, area_id, department);
+  drop constraint if exists mt_cfo_team_unique;
+-- ร่างเดิมเก็บชื่อทีมย่อยเป็นบทบาท: ย้ายเป็นสมาชิกของทีมนั้น (รันซ้ำได้)
+update public.mt_cfo_team set unit = role, role = 'member' where role in ('standard', 'academic', 'pr');
+alter table public.mt_cfo_team
+  add constraint mt_cfo_team_role_check check (role in ('admin', 'chairman', 'vice', 'advisor', 'smart', 'auditor', 'owner', 'member')),
+  -- สมาชิก = ตัวแทนหน่วยงาน (department) หรือสมาชิกของทีมย่อย (unit) · บทบาทอื่นไม่มีหน่วยงาน
+  add constraint mt_cfo_team_member_has_dept check (case when role = 'member' then department is not null or unit is not null else department is null end),
+  add constraint mt_cfo_team_unique unique nulls not distinct (year, employee_id, role, unit, team, area_id, department);
 create index if not exists mt_cfo_team_lookup on public.mt_cfo_team (year, employee_id);
 create unique index if not exists mt_cfo_team_one_owner on public.mt_cfo_team (year, area_id) where role = 'owner';
 

@@ -5,7 +5,7 @@ import { accessOf, actRoute, dateOf, fetchAll, fetchIn, imageBytes, must, namesO
 // Checklist audits — transaction: record Self / Committee audits and follow Issues to closure.
 // Rules: docs/specs/act-5s.md ("transaction", "Issue"). Pure rule functions are exported for scripts/test-act-audit.js.
 const AUDIT_TYPES = ['SELF', 'COMMITTEE'];
-const DEFAULTS = { pass_percent: 80, issue_score: 3, issue_due_days_before_next: 10, issue_photo_max: 1, self_audit_due_day: 10 };
+const DEFAULTS = { pass_percent: 80, issue_score: 3, issue_due_days_before_next: 15, issue_photo_max: 1, self_audit_due_day: 10 };
 
 const todayIso = () => new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
 const addDays = (iso, days) => new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
@@ -29,8 +29,9 @@ export function scoreAudit(items, scores, passPercent) {
 }
 
 // Next committee audit confirms the area's open Issues (old TSAT4-5S rule):
-// no action (text + after photo) -> that item scores 0 and the Issue is OVERDUE · action and score >= 4 -> CLOSED · otherwise it carries on.
-export function verifyIssues(openIssues, scores) {
+// no action (text + after photo) -> that item scores 0 and the Issue is OVERDUE · action and a score no longer below
+// issue_score (3: ผู้ใช้กำหนด 2026-10-30 เปิด Issue เมื่อต่ำกว่า 3) -> CLOSED · otherwise it carries on.
+export function verifyIssues(openIssues, scores, issueScore = DEFAULTS.issue_score) {
   const adjusted = new Map(scores);
   const updates = [];
   for (const issue of openIssues) {
@@ -41,7 +42,7 @@ export function verifyIssues(openIssues, scores) {
       continue;
     }
     const score = Number(adjusted.get(issue.checklist_id) ?? 0);
-    updates.push(score >= 4 ? { id: issue.id, status: 'CLOSED', final_score: score, closed: true } : { id: issue.id, status: 'OPEN', final_score: score, carry: true });
+    updates.push(score >= issueScore ? { id: issue.id, status: 'CLOSED', final_score: score, closed: true } : { id: issue.id, status: 'OPEN', final_score: score, carry: true });
   }
   return { scores: adjusted, updates };
 }
@@ -141,14 +142,14 @@ export function mountTransaction(app) {
 
     const own = must(await tx.from(t.issue).select('id,checklist_id,score,status,action_description,photo_after').eq('audit_id', audit.id));
     const carried = audit.audit_type === 'COMMITTEE' ? new Set((await openIssuesOf(t, audit.area_id, audit.id)).map((i) => i.checklist_id)) : new Set();
-    const low = (id) => scores.get(id) <= settings.issue_score;
+    const low = (id) => scores.get(id) < settings.issue_score;
     // Drop own Issues whose item is no longer low, only while nobody has worked on them yet.
     const drop = own.filter((i) => !low(i.checklist_id) && i.status === 'OPEN' && !String(i.action_description || '').trim() && !(i.photo_after || []).length);
     const stillOwn = new Set(own.filter((i) => !drop.includes(i)).map((i) => i.checklist_id));
     const needIssue = audit.audit_type === 'COMMITTEE' ? items.filter((i) => low(i.id) && !stillOwn.has(i.id) && !carried.has(i.id) && !locked.has(i.id)) : [];
     const described = new Map((Array.isArray(body.issues) ? body.issues : []).map((x) => [Number(x.checklistId), String(x.description || '').trim().slice(0, 2000)]));
     const undescribed = needIssue.filter((i) => !described.get(i.id)).map((i) => i.item_no);
-    if (undescribed.length) return fail(res, 400, `ข้อที่ได้ ≤ ${settings.issue_score} ต้องเปิด Issue พร้อมรายละเอียด (ข้อที่ ${undescribed.join(', ')})`);
+    if (undescribed.length) return fail(res, 400, `ข้อที่ได้ต่ำกว่า ${settings.issue_score} ต้องเปิด Issue พร้อมรายละเอียด (ข้อที่ ${undescribed.join(', ')})`);
 
     const score = scoreAudit(items, scores, settings.pass_percent);
     must(await tx.from(t.audit).update({ audited_at: `${auditedAt}T05:00:00Z`, team, total_score: score.total, percent_score: score.percent, result: score.result }).eq('id', audit.id));
@@ -207,7 +208,7 @@ export function mountTransaction(app) {
     let open = [];
     if (type === 'COMMITTEE') {
       open = await openIssuesOf(t, areaId);
-      verification = verifyIssues(open, scores);
+      verification = verifyIssues(open, scores, settings.issue_score);
       scores = verification.scores;
     }
     const missing = items.filter((i) => scores.get(i.id) == null).map((i) => i.item_no);
@@ -215,10 +216,10 @@ export function mountTransaction(app) {
 
     // Committee: every item at or below the issue score opens an Issue, unless an open Issue for that item carries on.
     const carried = new Set(verification.updates.filter((u) => u.carry || u.status === 'OVERDUE').map((u) => open.find((i) => i.id === u.id)?.checklist_id));
-    const needIssue = type === 'COMMITTEE' ? items.filter((i) => scores.get(i.id) <= settings.issue_score && !carried.has(i.id)) : [];
+    const needIssue = type === 'COMMITTEE' ? items.filter((i) => scores.get(i.id) < settings.issue_score && !carried.has(i.id)) : [];
     const described = new Map((Array.isArray(body.issues) ? body.issues : []).map((x) => [Number(x.checklistId), String(x.description || '').trim().slice(0, 2000)]));
     const undescribed = needIssue.filter((i) => !described.get(i.id)).map((i) => i.item_no);
-    if (undescribed.length) return fail(res, 400, `ข้อที่ได้ ≤ ${settings.issue_score} ต้องเปิด Issue พร้อมรายละเอียด (ข้อที่ ${undescribed.join(', ')})`);
+    if (undescribed.length) return fail(res, 400, `ข้อที่ได้ต่ำกว่า ${settings.issue_score} ต้องเปิด Issue พร้อมรายละเอียด (ข้อที่ ${undescribed.join(', ')})`);
 
     const score = scoreAudit(items, scores, settings.pass_percent);
     const prefix = `${type === 'SELF' ? 'S' : 'C'}-${area.code}-${auditedAt.slice(8, 10)}${auditedAt.slice(5, 7)}${auditedAt.slice(2, 4)}-`;

@@ -324,6 +324,14 @@ html[data-theme="dark"] .table-wrap::-webkit-scrollbar-thumb,html[data-theme="da
 .a5-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--team);color:#fff;font-size:11px}
 .a5-person{border:1px solid var(--mo-border);border-radius:var(--mo-radius);padding:6px 8px;font-size:12px;display:flex;justify-content:space-between;gap:8px}
 .a5-person span{color:var(--mo-text-muted);font-size:11px}
+/* 5S Team (ผู้ใช้กำหนด 2026-10-30): คณะกรรมการ 5ส + ทีมย่อย 4 ทีม */
+.a5-team-title{margin:16px 0 8px;font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px}.a5-team-title:first-child{margin-top:0}
+.a5-team-title .material-symbols-rounded{font-size:18px}
+.a5-unit-grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr));align-items:start}
+.a5-team-sub{margin-top:4px;font-size:11px;font-weight:600;color:var(--team)}
+.a5-unit-grid > .a5-team.is-wide{grid-column:1 / -1}
+.a5-people{display:flex;flex-direction:column;gap:6px}
+.a5-team.is-wide .a5-people{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
 @media(max-width:900px){
   .a5-two{grid-template-columns:1fr}
   .a5-side{grid-template-columns:1fr}

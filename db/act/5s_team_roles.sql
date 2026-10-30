@@ -1,7 +1,3 @@
--- 5S: จัดโครงสร้างทีมใหม่ เพิ่มบทบาททีมย่อย (standard = ทีมมาตรฐาน, academic = ทีมวิชาการ, pr = ทีมประชาสัมพันธ์) ใน mt_5s_team
--- รันใน Tx Data ของ Supabase · รันซ้ำได้
-alter table public.mt_5s_team
-  drop constraint if exists mt_5s_team_role_check,
-  add constraint mt_5s_team_role_check check (role in ('admin', 'chairman', 'vice', 'advisor', 'smart', 'auditor', 'owner', 'member', 'standard', 'academic', 'pr'));
-
-notify pgrst, 'reload schema';
+-- เลิกใช้แล้ว (2026-10-30): ทีมย่อยของ 5S เก็บในคอลัมน์ unit ของ mt_5s_team แทนบทบาท standard / academic / pr
+-- ให้รัน db/act/5s.sql ซ้ำแทน (รันซ้ำได้) ไฟล์นั้นย้ายรายชื่อเดิมเข้าทีมย่อยให้เอง · ไฟล์นี้ไม่ทำอะไร
+select 'use db/act/5s.sql' as note;

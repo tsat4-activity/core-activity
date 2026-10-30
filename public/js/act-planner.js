@@ -408,7 +408,7 @@ const APL_SET_TABS = { team: 'ทีม', plan: 'แผนงาน' };
 const APL_ROLE_LABEL = { ...ACT_TEAM_ROLES, auditor: 'ผู้ตรวจประเมิน' };
 // Team per activity (ผู้ใช้กำหนด 2026-10-29, docs/specs/act-teams.md); others use APL_ROLE_LABEL.
 // SMF = Smart Factory: Smart Team manages Setting (server accessOf), ที่ปรึกษา views.
-const APL_ROLE_LABELS = { smf: { chairman: 'ประธาน', vice: 'รองประธาน', advisor: 'ที่ปรึกษา', smart: 'Smart Team', member: 'ตัวแทนหน่วยงาน' } };
+const APL_ROLE_LABELS = { smf: { chairman: 'ประธาน', vice: 'รองประธาน', advisor: 'ที่ปรึกษา', admin: 'ผู้ประสานงาน', smart: 'Smart Team', member: 'ตัวแทนหน่วยงาน' } };
 const aplRolesOf = (activity) => APL_ROLE_LABELS[activity] || APL_ROLE_LABEL;
 const aplDashTab = {};
 const aplSetTab = {};

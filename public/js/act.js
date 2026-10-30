@@ -1,9 +1,9 @@
 // ระบบตั้งค่า > ปฏิทิน: every activity's plan with week / month / year views, read-only (server: server/modules/act).
 // Shared date helpers (actIso, actDate, actShort ...) are also used by act-planner.js.
 // One color per activity, in ACTIVITIES order (units.js).
-// Team roles every activity has, in this order (ผู้ใช้กำหนด 2026-10-29); เลขา = admin (manages Setting).
-// Activities add their own after these (5S ผู้ตรวจ ...). Server roles: server/modules/act/audit.js ROLES.
-const ACT_TEAM_ROLES = { chairman: 'ประธาน', vice: 'รองประธาน', admin: 'เลขา', member: 'สมาชิก' };
+// Every activity's team starts with ประธาน · รองประธาน · ที่ปรึกษา · ผู้ประสานงาน (ผู้ใช้กำหนด 2026-10-30), then its own
+// roles. ผู้ประสานงาน = admin (manages Setting). Server roles: server/modules/act/audit.js ROLES.
+const ACT_TEAM_ROLES = { chairman: 'ประธาน', vice: 'รองประธาน', advisor: 'ที่ปรึกษา', admin: 'ผู้ประสานงาน', member: 'สมาชิก' };
 // A title that starts with its own number ("1.1 แต่งตั้ง…", from Excel) next to a number column shows without it
 // (ผู้ใช้แจ้ง 2026-10-30: เลขซ้ำ). Display only; the stored title is unchanged.
 const actNoLead = (title) => String(title ?? '').replace(/^\s*\d+(?:\.\d+)*\.?\s+(?=\S)/, '');
