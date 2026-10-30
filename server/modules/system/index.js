@@ -163,7 +163,7 @@ export default defineModule({
       }
       const { data, error, count } = await query;
       if (error?.code === 'PGRST205') return fail(res, 400, `ยังไม่มีตาราง ${req.params.name} ในฐานข้อมูล ต้องรัน SQL สร้างตารางก่อน`);
-      if (error?.code === '42703') return fail(res, 400, `ตาราง ${req.params.name} ยังไม่มีคอลัมน์ใหม่ ต้องรัน SQL ใน db/ ก่อน (mt_main_user: db/06_main_user_access.sql)`);
+      if (error?.code === '42703') return fail(res, 400, `ตาราง ${req.params.name} ยังไม่มีคอลัมน์ใหม่ ต้องรัน SQL ใน db/ ก่อน (mt_main_*: db/00_main.sql ในฐาน MX · ตารางกิจกรรม: db/act/<กิจกรรม>.sql)`);
       if (error) return fail(res, 400, 'อ่านตารางไม่ได้');
       res.json({ rows: data || [], total: count || 0 });
     }));
