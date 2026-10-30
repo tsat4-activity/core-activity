@@ -292,6 +292,10 @@ html[data-theme="dark"] .table-wrap::-webkit-scrollbar-thumb,html[data-theme="da
 .a5-side > .card{min-width:0}
 .a5-side > .table-wrap{min-width:0;align-self:stretch}
 .a5-side > .table-wrap > table{height:100%}
+.a5-charts{display:flex;flex-direction:column;gap:8px;min-width:0}
+.a5-charts > .card{min-width:0}
+/* Self / Committee table headers carry their chart colour (ชุดสี A / B) */
+.a5-side th.a5-type-head{text-align:center;color:var(--team);border-bottom:3px solid var(--team)}
 .a5-rank td:nth-child(n+3),.a5-rank th:nth-child(n+3){text-align:right}
 .a5-rank tfoot td{font-weight:600;color:var(--mo-primary);border-top:2px solid var(--mo-line)}
 .a5-legend{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;font-size:11px;color:var(--mo-text-muted);margin:0 0 6px}

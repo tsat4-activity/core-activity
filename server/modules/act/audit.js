@@ -117,7 +117,10 @@ export function mountAudit(app) {
     const areaType = AREA_TYPES.includes(req.query.areaType) ? req.query.areaType : '';
     const areaId = Number(req.query.area) || 0;
     const allowed = new Set(areas.filter((a) => (!areaType || a.area_type === areaType) && (!areaId || a.id === areaId)).map((a) => a.id));
-    const audits = (await auditsOf(activity, year, req.query.type)).filter((a) => allowed.has(a.area_id));
+    // Every type in one read: the KPI cards follow the ประเภท filter, the monthly charts show Self and Committee apart.
+    const all = (await auditsOf(activity, year)).filter((a) => allowed.has(a.area_id));
+    const type = AUDIT_TYPES.includes(req.query.type) ? req.query.type : '';
+    const audits = type ? all.filter((a) => a.audit_type === type) : all;
     const groups = await groupsOf(activity, audits.map((a) => a.id));
     const owner = areaId ? (await ownersOf(activity, year, [areaId])).get(areaId) : '';
     const pass = await tx.from(tablesOf(activity).setting).select('value').eq('key', 'pass_percent').maybeSingle();
@@ -125,6 +128,7 @@ export function mountAudit(app) {
       pass: Number(pass.data?.value) || 80,
       areas: areas.filter((a) => a.status === 'Active' || allowed.has(a.id)).map((a) => ({ id: a.id, code: a.code, name: a.name, areaType: a.area_type })),
       ...summarize(audits, groups),
+      byType: Object.fromEntries(AUDIT_TYPES.map((t) => [t, summarize(all.filter((a) => a.audit_type === t), []).months])),
       owner: owner ? { employeeId: owner, name: (await namesOf([owner])).get(owner)?.name || '' } : null
     });
   });

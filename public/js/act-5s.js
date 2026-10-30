@@ -86,13 +86,23 @@ async function a5Dashboard(target, activity) {
   await draw(body, activity, me);
 }
 
+// 5S Summary (ผู้ใช้กำหนด 2026-10-30): left = Self Audit chart over Committee chart, right = one table with both;
+// Self = ชุดสี A, Committee = ชุดสี B, the same colours on the charts and the table headers.
+const A5_TYPE_SETS = [['SELF', 'Self Audit', 1], ['COMMITTEE', 'Committee Audit', 2]]; // [type, label, CHART.series index]
+
 async function a5DrawSummary(body, activity) {
   const q = new URLSearchParams({ year: a5Year, type: a5Summary.type, areaType: a5Summary.areaType, area: a5Summary.area });
   const data = await a5Api(activity, `dashboard/summary?${q}`);
   const areas = data.areas.filter((a) => !a5Summary.areaType || a.areaType === a5Summary.areaType);
-  const months = data.months;
+  const byType = data.byType || {};
   const pass = data.pass || 80; // pass_percent setting
-  const row = (m) => `<tr><td>${ACT_MONTHS[m.month - 1]}</td><td>${m.percent}%</td><td>${m.audits}</td></tr>`;
+  const sets = A5_TYPE_SETS.map(([type, label, c]) => ({ type, label, color: CHART.series[c], months: byType[type] || Array.from({ length: 12 }, (_, i) => ({ month: i + 1, percent: 0, audits: 0 })) }));
+  const chart = (set, i) => chartCard(`${esc(set.label)} Score % รายเดือน`, chartPlot({ id: `a5-plot-${i}`, labels: ACT_MONTHS_SHORT, left: 'Score (%)', leftMax: 100,
+    bars: [{ values: set.months.map((m) => m.percent), colors: [set.color], unit: '%', inner: set.months.map((m) => (m.audits ? `${m.audits} ใบ` : '')) }],
+    lines: [{ values: set.months.map(() => pass), color: CHART.target, dash: true, dots: false, unit: '%' }],
+    legend: [{ box: set.color, label: `${set.label} % เฉลี่ยของเดือน` }, { line: CHART.target, dash: true, label: `เกณฑ์ผ่าน ${pass}%` }] }));
+  const head = sets.map((set) => `<th colspan="2" class="a5-type-head" style="--team:${set.color}">${esc(set.label)}</th>`).join('');
+  const row = (i) => `<tr><td>${ACT_MONTHS[i]}</td>${sets.map((set) => `<td>${set.months[i].percent}%</td><td>${set.months[i].audits}</td>`).join('')}</tr>`;
   body.innerHTML = `
     <div class="toolbar a5-filters">
       ${field('ประเภท', `<select id="a5-type">${options(['', 'SELF', 'COMMITTEE'], a5Summary.type, (v) => ({ '': 'ทั้งหมด', SELF: 'Self Audit', COMMITTEE: 'Committee' }[v]))}</select>`)}
@@ -100,18 +110,17 @@ async function a5DrawSummary(body, activity) {
       ${field('พื้นที่', `<select id="a5-area"><option value="">ทั้งหมด</option>${areas.map((a) => `<option value="${a.id}"${String(a.id) === String(a5Summary.area) ? ' selected' : ''}>${esc(a.code)} ${esc(a.name)}</option>`).join('')}</select>`, 'grow')}
     </div>
     <div class="ch-kpis">${(data.groups.length ? data.groups : [1, 2, 3, 4, 5].map((n) => ({ group: n, percent: 0 }))).map((g, i) => chartKpi({ label: `${esc(a5GroupName(activity, g.group))} · เฉลี่ยทั้งปี`, value: g.percent, unit: '%', pie: g.percent, color: CHART.series[i % CHART.series.length], note: g.percent >= pass ? 'ผ่านเกณฑ์' : g.percent ? `ต่ำกว่าเกณฑ์ ${pass}%` : '' })).join('')}</div>
+    ${data.owner ? `<p class="sum-meta">เจ้าของพื้นที่: ${esc(data.owner.name || data.owner.employeeId)}</p>` : ''}
     <div class="a5-side">
-    ${chartCard(`${esc(actLabel(activity))} Score % รายเดือน`, `${chartPlot({ id: 'a5-plot', labels: ACT_MONTHS_SHORT, left: 'Score (%)', leftMax: 100, bars: [{ values: months.map((m) => m.percent), colors: [CHART.series[0]], unit: '%', inner: months.map((m) => (m.audits ? `${m.audits} ใบ` : '')) }],
-        lines: [{ values: months.map(() => pass), color: CHART.target, dash: true, dots: false, unit: '%' }],
-        legend: [{ box: CHART.series[0], label: `${actLabel(activity)} % เฉลี่ยของเดือน` }, { line: CHART.target, dash: true, label: `เกณฑ์ผ่าน ${pass}%` }] })}`, `${data.owner ? `เจ้าของพื้นที่: ${esc(data.owner.name || data.owner.employeeId)}` : ''}`)}
-    <div class="table-wrap"><table class="mo-data-table"><thead><tr><th>เดือน</th><th>${esc(actLabel(activity))} %</th><th>ครั้ง</th></tr></thead><tbody>${months.map(row).join('')}</tbody></table></div>
+      <div class="a5-charts">${sets.map(chart).join('')}</div>
+      <div class="table-wrap"><table class="mo-data-table"><thead><tr><th rowspan="2">เดือน</th>${head}</tr><tr>${sets.map(() => '<th>%</th><th>ครั้ง</th>').join('')}</tr></thead><tbody>${ACT_MONTHS.map((_, i) => row(i)).join('')}</tbody></table></div>
     </div>`;
   a5Lift(body);
   const redraw = () => a5DrawSummary(body, activity).catch(onErr);
   $('a5-type').onchange = () => { a5Summary.type = $('a5-type').value; redraw(); };
   $('a5-atype').onchange = () => { a5Summary.areaType = $('a5-atype').value; a5Summary.area = ''; redraw(); };
   $('a5-area').onchange = () => { a5Summary.area = $('a5-area').value; redraw(); };
-  chartTip('a5-plot', (i) => `<strong>${ACT_MONTHS[i]} ${a5Year}</strong><div class="ch-tip-row"><span>Score</span><b>${months[i].percent}%</b></div><div class="ch-tip-row"><span>ใบตรวจ</span><b>${months[i].audits}</b></div>${months[i].audits ? chartPill(months[i].percent, pass, ' เทียบเกณฑ์', true) : ''}`);
+  sets.forEach((set, n) => chartTip(`a5-plot-${n}`, (i) => `<strong>${esc(set.label)} · ${ACT_MONTHS[i]} ${a5Year}</strong><div class="ch-tip-row"><span>Score</span><b>${set.months[i].percent}%</b></div><div class="ch-tip-row"><span>ใบตรวจ</span><b>${set.months[i].audits}</b></div>${set.months[i].audits ? chartPill(set.months[i].percent, pass, ' เทียบเกณฑ์', true) : ''}`));
 }
 
 async function a5DrawRanking(body, activity) {
