@@ -1,0 +1,49 @@
+DELETE /api/act/:activity/areas/:id auth
+DELETE /api/act/:activity/audits/:id auth
+DELETE /api/act/:activity/checklist/:id auth
+DELETE /api/act/:activity/tasks/:id auth
+DELETE /api/act/:activity/team/:id auth
+DELETE /api/system/tables/:name auth creator
+GET /api/act/:activity/areas auth
+GET /api/act/:activity/audit-form auth
+GET /api/act/:activity/audit-plan auth
+GET /api/act/:activity/audits auth
+GET /api/act/:activity/audits/:id auth
+GET /api/act/:activity/checklist auth
+GET /api/act/:activity/dashboard/ranking auth
+GET /api/act/:activity/dashboard/schedule auth
+GET /api/act/:activity/dashboard/summary auth
+GET /api/act/:activity/employees auth
+GET /api/act/:activity/issues auth
+GET /api/act/:activity/me auth
+GET /api/act/:activity/tasks auth
+GET /api/act/:activity/team auth
+GET /api/act/calendar auth
+GET /api/health
+GET /api/me auth
+GET /api/system/choices auth creator
+GET /api/system/tables auth creator
+GET /api/system/tables/:name auth creator
+PATCH /api/act/:activity/areas/:id auth
+PATCH /api/act/:activity/audits/:id auth
+PATCH /api/act/:activity/checklist/:id auth
+PATCH /api/act/:activity/issues/:id auth
+PATCH /api/act/:activity/tasks/:id auth
+PATCH /api/act/:activity/tasks/dates auth
+PATCH /api/act/:activity/team/:id auth
+PATCH /api/system/tables/:name auth creator
+POST /api/act/:activity/areas auth
+POST /api/act/:activity/audits auth
+POST /api/act/:activity/checklist auth
+POST /api/act/:activity/checklist/copy auth
+POST /api/act/:activity/issues/:id/action auth
+POST /api/act/:activity/issues/:id/photo auth
+POST /api/act/:activity/tasks auth
+POST /api/act/:activity/team auth
+POST /api/act/:activity/team/copy auth
+POST /api/login
+POST /api/logout
+POST /api/password auth
+POST /api/system/tables/:name auth creator
+PUT /api/act/:activity/areas/:id/owner auth
+PUT /api/act/:activity/audit-plan auth
