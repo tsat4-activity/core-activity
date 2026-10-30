@@ -138,6 +138,8 @@ input:disabled,select:disabled,textarea:disabled{opacity:.55;cursor:not-allowed}
 .search-list{max-height:168px;overflow:auto;border:1px solid var(--mo-line);border-radius:var(--mo-radius);background:var(--mo-surface)}
 .search-block > .search-list{position:absolute;left:0;right:0;top:100%;margin-top:2px;z-index:60;max-height:260px;box-shadow:0 10px 24px rgba(0,0,0,.18)}
 .search-block > .search-list:empty{display:none}
+/* In a popup the list takes room (the popup grows down) instead of floating, so the popup frame does not cut it (ผู้ใช้แจ้ง 2026-10-30) */
+.popup .search-block > .search-list{position:static;margin-top:4px;max-height:320px;box-shadow:none}
 .search-block > .search-list .table-wrap{border:0;max-height:none}
 .popup-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
 .popup-actions .btn{width:auto}
