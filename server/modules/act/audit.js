@@ -307,7 +307,7 @@ export function mountAudit(app) {
     const managerId = role === 'member' && req.body?.managerId ? String(req.body.managerId).trim().slice(0, 20) || null : undefined;
     if (!employeeId || !role) return fail(res, 400, 'เลือกพนักงานและบทบาท');
     if (role === 'auditor' && !/^[A-Z]$/.test(team)) return fail(res, 400, 'ผู้ตรวจต้องเลือกทีม A–Z');
-    if (role === 'owner' && !areaId) return fail(res, 400, 'ตัวแทนพื้นที่ต้องระบุพื้นที่');
+    if (role === 'owner' && !areaId) return fail(res, 400, 'ผู้รับผิดชอบพื้นที่ต้องระบุพื้นที่');
     if (role === 'member' && !department) return fail(res, 400, 'ตัวแทนหน่วยงานต้องระบุหน่วยงาน');
     if (role === 'owner') {
       await tx.from(tablesOf(activity).team).delete().eq('year', year).eq('area_id', areaId).eq('role', 'owner');

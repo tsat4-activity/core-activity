@@ -7,7 +7,7 @@ const A5_GROUPS = { '5s': ['สะสาง', 'สะดวก', 'สะอา�
 const A5_TEAMS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
 const A5_TEAM_COLORS = { A: '#1f2937', B: '#ec4899', C: '#f97316', D: '#ca8a04', E: '#0d9488', F: '#2563eb', G: '#9333ea', H: '#06b6d4', I: '#9ca3af' };
 const A5_AREA_TYPES = ['โรงงาน', 'สำนักงาน'];
-const A5_ROLE_LABEL = { chairman: 'ประธาน', vice: 'รองประธาน', advisor: 'ที่ปรึกษา', admin: 'เลขา', auditor: 'ผู้ตรวจประเมิน', owner: 'ตัวแทนพื้นที่' };
+const A5_ROLE_LABEL = { chairman: 'ประธาน', vice: 'รองประธาน', admin: 'ผู้ประสานงาน', auditor: 'ผู้ตรวจประเมิน', owner: 'ผู้รับผิดชอบพื้นที่' };
 const A5_DASH_TABS = { summary: 'Summary', ranking: 'Ranking', schedule: 'Schedule', audit: 'Audit Plan', team: 'Team' };
 // Setting tabs: ทีม, แผนงาน, then the activity's own tables (ผู้ใช้กำหนด 2026-10-29)
 const A5_SET_TABS = { team: 'ทีม', gantt: 'แผนงาน', areas: 'พื้นที่', checklist: 'หัวข้อตรวจ', plan: 'แผนตรวจ' };
@@ -190,13 +190,13 @@ async function a5DrawTeam(body, activity) {
   const areasList = (areasData.areas || []).filter((a) => a.status === 'Active');
   const active = data.members.filter((m) => m.status === 'Active');
   const person = (m) => `<div class="a5-person">${esc(m.employee_id)} · ${esc(m.name || '-')}<span>${esc(m.department || '')}</span></div>`;
-  // Top: ประธาน · รองประธาน · ที่ปรึกษา · เลขา
-  const topRoles = { chairman: 'ประธาน', vice: 'รองประธาน', advisor: 'ที่ปรึกษา', admin: 'เลขา' };
+  // Top: ประธาน · รองประธาน · ผู้ประสานงาน
+  const topRoles = { chairman: 'ประธาน', vice: 'รองประธาน', admin: 'ผู้ประสานงาน' };
   const owners = active.filter((m) => m.role === 'owner');
   const teams = A5_TEAMS.filter((t) => active.some((m) => m.team === t)).concat([...new Set(active.filter((m) => m.team && !A5_TEAMS.includes(m.team)).map((m) => m.team))]);
-  const tones = { chairman: '#475569', vice: '#64748b', advisor: '#7c3aed', admin: 'var(--mo-primary)' };
+  const tones = { chairman: '#475569', vice: '#64748b', admin: 'var(--mo-primary)' };
   // icons, not letters: this Thai font draws ร / ล like s / a
-  const badges = { chairman: 'workspace_premium', vice: 'military_tech', advisor: 'school', admin: 'edit_note' };
+  const badges = { chairman: 'workspace_premium', vice: 'military_tech', admin: 'assignment_ind' };
   body.innerHTML = `
     <div class="a5-team-grid a5-team-top">${Object.entries(topRoles).map(([role, label]) => {
       const list = active.filter((m) => m.role === role);
@@ -207,10 +207,10 @@ async function a5DrawTeam(body, activity) {
       const list = active.filter((m) => m.role === 'auditor' && m.team === t);
       return `<div class="a5-team" style="--team:${a5TeamColor(t)}"><div class="a5-team-head"><span class="a5-badge">${esc(t)}</span>ทีม ${esc(t)}<span>${list.length} คน</span></div>${list.map(person).join('')}</div>`;
     }).join('') || '<p class="empty">ยังไม่มีทีมผู้ตรวจประเมินปีนี้</p>'}</div>
-    <div style="margin:20px 0 10px;font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px"><span class="material-symbols-rounded" style="font-size:18px">location_on</span>ตัวแทนพื้นที่ (${owners.length} พื้นที่)</div>
+    <div style="margin:20px 0 10px;font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px"><span class="material-symbols-rounded" style="font-size:18px">location_on</span>ผู้รับผิดชอบพื้นที่ (${owners.length} พื้นที่)</div>
     <div class="a5-team-grid">${owners.length ? owners.map((m) => `
       <div class="a5-team" style="--team:#0284c7"><div class="a5-team-head"><span class="a5-badge"><span class="material-symbols-rounded" style="font-size:15px">location_on</span></span>${esc([m.area_code, m.area_name].filter(Boolean).join(' ') || 'พื้นที่')}<span></span></div>
-      <div class="a5-person">${esc(m.employee_id)} · ${esc(m.name || '-')}<span>${esc(m.department || '')}</span></div></div>`).join('') : '<p class="empty">ยังไม่ได้กำหนดตัวแทนพื้นที่ปีนี้</p>'}</div>`;
+      <div class="a5-person">${esc(m.employee_id)} · ${esc(m.name || '-')}<span>${esc(m.department || '')}</span></div></div>`).join('') : '<p class="empty">ยังไม่ได้กำหนดผู้รับผิดชอบพื้นที่ปีนี้</p>'}</div>`;
   a5Lift(body);
 }
 
@@ -322,7 +322,7 @@ async function a5SetTeam(body, activity, admin, rerender, roles = A5_ROLE_LABEL)
     openPopup(`เพิ่มรายชื่อปี ${a5Year}`, `${a5EmpField('พนักงาน')}
       ${field('บทบาท', `<select id="a5-role">${options(keys, keys[0], (v) => roles[v])}</select>`)}
       ${hasTeam ? field('ทีม (เฉพาะผู้ตรวจประเมิน)', `<select id="a5-team">${options(A5_TEAMS, 'A')}</select>`, '') : ''}
-      ${keys.includes('owner') && areasList.length ? field('พื้นที่ (เฉพาะตัวแทนพื้นที่)', `<select id="a5-owner-area">${options(areasList.map((a) => a.id), areasList[0]?.id, (id) => { const a = areasList.find((x) => x.id === id); return a ? `${a.code} - ${a.name}` : id; })}</select>`, '') : ''}
+      ${keys.includes('owner') && areasList.length ? field('พื้นที่ (เฉพาะผู้รับผิดชอบพื้นที่)', `<select id="a5-owner-area">${options(areasList.map((a) => a.id), areasList[0]?.id, (id) => { const a = areasList.find((x) => x.id === id); return a ? `${a.code} - ${a.name}` : id; })}</select>`, '') : ''}
       ${keys.includes('member') ? field('หน่วยงาน (เฉพาะสมาชิก)', '<input id="a5-dept" maxlength="80" placeholder="เช่น PD1">') : ''}`, async () => {
       if (!chosen) throw new Error('เลือกพนักงานจากรายชื่อก่อน');
       const r = $('a5-role').value;
