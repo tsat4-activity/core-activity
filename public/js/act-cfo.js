@@ -41,7 +41,7 @@ const CFO_GWP_GASES = [['co2', 'CO₂'], ['ch4_fossil', 'Fossil CH₄'], ['ch4',
 const CFO_REF_COLS = {
   energy: { title: 'GHG Emission Factors for energy consumption (per unit)', cols: [['name', 'Emission Source'], ['unit', 'Units'], ['co2', 'CO₂', '(kgCO₂/unit)', 1], ['ch4_fossil', 'Fossil CH₄', '(kgCH₄/unit)', 1],
     ['ch4', 'CH₄', '(kgCH₄/unit)', 1], ['n2o', 'N₂O', '(kgN₂O/unit)', 1], ['total', 'Total', '(kgCO₂-eq/unit)', 1], ['reference', 'Emission Reference'], ['remark', 'หมายเหตุ']] },
-  chemical: { title: 'Global warming potential ของสารเคมี / สารทำความเย็น', cols: [['name', 'Common chemical name'], ['formula', 'สูตร / ชื่ออื่น'], ['unit', 'Units'], ['total', 'GWP Total', '(kgCO₂-eq/unit)', 1], ['reference', 'Reference']] },
+  chemical: { title: 'Global warming potential ของสารเคมี / สารทำความเย็น', cols: [['name', 'Common chemical name'], ['unit', 'Units'], ['total', 'GWP Total', '(kgCO₂-eq/unit)', 1], ['reference', 'Reference']] },
   ipcc: { title: 'GHG Emission Factors from IPCC Guidelines', cols: [['name', 'Emission Source'], ['co2', 'CO₂', '(kgCO₂/TJ)', 1], ['ch4_fossil', 'Fossil CH₄', '(kgCH₄/TJ)', 1], ['ch4', 'CH₄', '(kgCH₄/TJ)', 1],
     ['n2o', 'N₂O', '(kgN₂O/TJ)', 1], ['total', 'Total', '(kgCO₂-eq/TJ)', 1], ['reference', 'Emission Reference']] },
   // grp = Heating value / Density / Conversion Factor: the band row names what the value is
