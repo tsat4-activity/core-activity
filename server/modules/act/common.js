@@ -18,6 +18,7 @@ export function tablesOf(activity) {
     team: `mt_${k}_team`,
     setting: `mt_${k}_setting`,
     task: `mt_${k}_task`, // Project Planner (planner.js)
+    project: `mt_${k}_project`, // SMF projects per year (smf.js)
     area: `mt_${k}_area`,
     checklist: `mt_${k}_checklist`,
     auditPlan: `mt_${k}_audit_plan`,
@@ -118,6 +119,28 @@ export async function namesOf(ids) {
 // ที่ปรึกษา · ผู้ประสานงาน). 5S has four teams; ทีมตรวจประเมิน also holds the area owners and the auditors.
 export const ACT_UNITS = { '5s': ['standard', 'academic', 'pr', 'audit'] };
 export const AUDIT_UNIT = 'audit';
+// Activities whose sub-teams are their projects of the year (mt_<act>_project, ผู้ใช้กำหนด 2026-11-01): SMF.
+export const PROJECT_ON = ['smf'];
+
+// The year's sub-team codes: fixed (5S) or the activity's projects (SMF; activeOnly = what new rows may use).
+export async function unitsOf(activity, year, activeOnly = false) {
+  if (!PROJECT_ON.includes(activity)) return ACT_UNITS[activity] || [];
+  let q = tx.from(tablesOf(activity).project).select('code,status').eq('year', year);
+  if (activeOnly) q = q.eq('status', 'Active');
+  const { data, error } = await q;
+  if (error?.code === 'PGRST205') return [];
+  if (error) throw error;
+  return (data || []).map((r) => r.code);
+}
+
+// [{ code, name, status }] of the year, in screen order (SMF projects); [] for other activities.
+export async function projectsOf(activity, year) {
+  if (!PROJECT_ON.includes(activity)) return [];
+  const { data, error } = await tx.from(tablesOf(activity).project).select('id,code,name,sort_no,status').eq('year', year).order('sort_no').order('id');
+  if (error?.code === 'PGRST205') return [];
+  if (error) throw error;
+  return data || [];
+}
 
 export async function accessOf(req, activity, year) {
   const me = req.user.employeeId;

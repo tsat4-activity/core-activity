@@ -7,6 +7,8 @@ import { mountTransaction } from './transaction.js';
 import { PLANNER_ON, mountPlanner, plannerEvents } from './planner.js';
 import { CFO_ON, mountCfo } from './cfo.js';
 import { mountOverview } from './overview.js';
+import { mountSmf } from './smf.js';
+import { PROJECT_ON } from './common.js';
 
 // Activities 5S and CFO: calendar here, Project Planner in planner.js, checklist audit Dashboard/Setting in audit.js,
 // audits and Issues in transaction.js, CFO in cfo.js. Each activity has its own tables (db/act/<activity>.sql, scripts/act-sql.js).
@@ -21,7 +23,8 @@ function tablesForSystem() {
     const t = tablesOf(activity);
     out[t.team] = { db: 'tx', pk: ['id'], columns: [['id', 'read'], ['year', 'int', true], ['employee_id', 'text', true], ['role', 'actrole', true], ['unit', 'text'], ['team', 'text'], ['area_id', 'int'], ['department', 'text'], ['status', 'status', true]] };
     out[t.setting] = { db: 'tx', pk: ['key'], columns: [['key', 'text', true], ['value', 'text', true]] };
-    if (PLANNER_ON.includes(activity)) out[t.task] = { db: 'tx', pk: ['id'], columns: [['id', 'read'], ['year', 'int', true], ['parent_id', 'int'], ['sort_no', 'int', true], ['title', 'text', true], ['start_date', 'date'], ['end_date', 'date'], ['progress', 'int', true], ['owner_id', 'text'], ['color', 'text'], ['note', 'text'], ['created_by', 'read']] };
+    if (PROJECT_ON.includes(activity)) out[t.project] = { db: 'tx', pk: ['id'], columns: [['id', 'read'], ['year', 'int', true], ['code', 'text', true], ['name', 'text', true], ['sort_no', 'int', true], ['status', 'status', true]] };
+    if (PLANNER_ON.includes(activity)) out[t.task] = { db: 'tx', pk: ['id'], columns: [['id', 'read'], ['year', 'int', true], ['parent_id', 'int'], ['unit', 'text'], ['sort_no', 'int', true], ['title', 'text', true], ['start_date', 'date'], ['end_date', 'date'], ['progress', 'int', true], ['owner_id', 'text'], ['color', 'text'], ['note', 'text'], ['created_by', 'read']] };
     if (CFO_ON.includes(activity)) {
       out[t.cfoScope] = { db: 'tx', pk: ['code'], columns: [['code', 'text', true], ['scope', 'int', true], ['name', 'text', true], ['name_th', 'text']] };
       out[t.gwp] = { db: 'tx', pk: ['code'], columns: [['code', 'text', true], ['co2', 'qty', true], ['ch4_fossil', 'qty', true], ['ch4', 'qty', true], ['n2o', 'qty', true], ['sf6', 'qty', true], ['nf3', 'qty', true], ['reference', 'text'], ['status', 'status', true]] };
@@ -53,6 +56,7 @@ export default defineModule({
     }));
 
     mountOverview(app); // SMF Dashboard > ภาพรวม of every project
+    mountSmf(app); // SMF projects of the year
     mountPlanner(app);
     mountAudit(app);
     mountTransaction(app);

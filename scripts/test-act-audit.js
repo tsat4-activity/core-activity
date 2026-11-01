@@ -18,6 +18,21 @@ const throws = async (db, sql) => { try { await db.exec(sql); return false; } ca
 ok(fs.readFileSync(path.join(ROOT, 'db', 'act', '5s.sql'), 'utf8') === actSql('5s'), 'db/act/5s.sql is up to date (node scripts/act-sql.js 5s)');
 ok(fs.readFileSync(path.join(ROOT, 'db', 'act', '5s_task.sql'), 'utf8') === actTaskSql('5s'), 'db/act/5s_task.sql is up to date (node scripts/act-sql.js 5s --add-task)');
 ok(fs.readFileSync(path.join(ROOT, 'db', 'act', 'smf.sql'), 'utf8') === actSql('smf', { audit: false }), 'db/act/smf.sql is up to date (node scripts/act-sql.js smf --no-audit)');
+{
+  // SMF projects of the year (2026: Smart OEE, Vision Camera, Work Flow Automation): team and plan point at the code
+  const smf = new PGlite();
+  await smf.exec(`do $$ begin create role anon; create role authenticated; exception when duplicate_object then null; end $$;`);
+  await smf.exec(actSql('smf', { audit: false }));
+  await smf.exec(actSql('smf', { audit: false }));
+  const names = (await smf.query(`select name from mt_smf_project where year = 2026 order by sort_no`)).rows.map((r) => r.name);
+  ok(names.join(' / ') === 'Smart OEE / Vision Camera / Work Flow Automation', 'SMF 2026 projects seeded once');
+  ok(await throws(smf, `insert into mt_smf_project (year, code, name) values (2026, 'oee', 'x')`), 'one code per year');
+  ok(await throws(smf, `insert into mt_smf_project (year, code, name) values (2027, 'Smart OEE', 'x')`), 'code is a–z 0–9 - _');
+  await smf.exec(`insert into mt_smf_team (year, employee_id, role, unit) values (2026, '1', 'chairman', 'oee'), (2026, '2', 'member', 'vision')`);
+  await smf.exec(`insert into mt_smf_task (year, title, unit, created_by) values (2026, 'OEE dashboard', 'oee', '1')`);
+  ok(true, 'project team (chairman, member without department) and a main plan item of a project');
+  await smf.close();
+}
 ok(fs.readFileSync(path.join(ROOT, 'db', 'setup.sql'), 'utf8') === setupSql(), 'db/setup.sql is up to date (node scripts/setup-sql.js)');
 
 // A new Supabase: db/setup.sql builds everything on an empty database, twice.

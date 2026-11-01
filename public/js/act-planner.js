@@ -18,6 +18,7 @@ let aplYear = new Date().getFullYear();
 let aplMonth = new Date().getMonth(); // month of the plan, 12–23 = next year
 let aplSelected = null;
 let aplQuery = '';
+let aplUnit = ''; // โครงการ filter (SMF projects); '' = all
 const aplCollapsed = new Set();
 
 function aplLastDay(year, month) {
@@ -211,8 +212,13 @@ async function aplRender(target, activity, opts = {}) {
   const q = aplQuery.trim().toLowerCase();
   const match = (t) => !q || `${t.title} ${t.owner_name}`.toLowerCase().includes(q);
   const lines = aplLines(g);
+  // SMF: main items belong to a project (ผู้ใช้กำหนด 2026-11-01) · rows are grouped under each project's name
+  const units = data.units || [];
+  if (aplUnit && !units.some((u) => u.code === aplUnit)) aplUnit = '';
+  const unitName = (code) => units.find((u) => u.code === code)?.name || 'ไม่ระบุโครงการ';
   let rows = '';
-  phases.forEach((p, pi) => {
+  const drawPhases = (list) => list.forEach((p) => {
+    const pi = phases.indexOf(p);
     const kids = kidsOf(p.id);
     const shownKids = q ? kids.filter(match) : kids;
     if (!match(p) && !shownKids.length) return;
@@ -220,10 +226,23 @@ async function aplRender(target, activity, opts = {}) {
     rows += aplRow(p, `${pi + 1}`, color, g, lines, canEdit, { kids: kids.length });
     if (!aplCollapsed.has(p.id)) shownKids.forEach((k) => { rows += aplRow(k, `${pi + 1}.${kids.indexOf(k) + 1}`, color, g, lines, canEdit, null); });
   });
+  if (units.length) {
+    const codes = [...units.map((u) => u.code), ''].filter((c) => !aplUnit || c === aplUnit);
+    codes.forEach((code) => {
+      const list = phases.filter((p) => (p.unit || '') === code && (code || !units.some((u) => u.code === p.unit)));
+      if (!list.length && !code) return;
+      const dated = list.filter((p) => p.start_date);
+      const days = (p) => (actDate(p.end_date) - actDate(p.start_date)) / 86400000 + 1;
+      const pct = dated.length ? Math.round(dated.reduce((s, p) => s + days(p) * p.progress, 0) / dated.reduce((s, p) => s + days(p), 0)) : 0;
+      rows += `<div class="apl-row apl-group"><div class="apl-left"><div></div><div><b>${esc(unitName(code))}</b></div><div class="sum-meta">${list.length} หัวข้อ</div><div class="apl-pct">${pct}</div></div><div class="apl-track">${lines}</div></div>`;
+      drawPhases(list);
+    });
+  } else drawPhases(phases);
   if (canEdit) rows += `<div class="apl-row apl-addrow"><div class="apl-left"><div></div><div><button class="apl-link" type="button" id="apl-add-phase">+ เพิ่มข้อหลัก</button></div><div></div><div></div></div><div class="apl-track">${lines}</div></div>`;
   const years = [aplYear - 1, aplYear, aplYear + 1].filter((y) => y >= 2000 && y <= 2100);
   const seg = `<div class="seg" role="group" aria-label="มุมมอง">${[['year', 'รายปี'], ['month', 'รายเดือน']].map(([mode, name]) => `<button class="seg-btn${mode === aplView ? ' is-active' : ''}" type="button" data-aplview="${mode}" aria-pressed="${mode === aplView}">${name}</button>`).join('')}</div>`;
-  const search = field('ค้นหา', `<input id="apl-q" placeholder="ชื่อรายการหรือผู้รับผิดชอบ" value="${esc(aplQuery)}">`);
+  const search = (units.length ? field('โครงการ', `<select id="apl-unit">${options(['', ...units.map((u) => u.code)], aplUnit, (v) => (v ? unitName(v) : 'ทั้งหมด'))}</select>`) : '')
+    + field('ค้นหา', `<input id="apl-q" placeholder="ชื่อรายการหรือผู้รับผิดชอบ" value="${esc(aplQuery)}">`);
   // All on the right (the page has no sub-pages), large to small: year → year/month view → month → search →
   // create / edit / delete at the far right.
   const tools = `${inPage ? '' : `<div class="a5-year">${field('ปี', `<select id="apl-year">${years.map((y) => `<option value="${y}"${y === aplYear ? ' selected' : ''}>${y}</option>`).join('')}</select>`)}</div>`}
@@ -258,6 +277,7 @@ async function aplRender(target, activity, opts = {}) {
   const byId = (id) => tasks.find((t) => t.id === Number(id));
   document.querySelectorAll('[data-aplview]').forEach((node) => { node.onclick = () => { aplView = node.dataset.aplview; rerender(); }; });
   if ($('apl-year')) $('apl-year').onchange = () => { aplYear = Number($('apl-year').value); aplMonth %= 12; aplSelected = null; rerender(); };
+  if ($('apl-unit')) $('apl-unit').onchange = () => { aplUnit = $('apl-unit').value; rerender(); };
   let typing;
   $('apl-q').oninput = () => { clearTimeout(typing); typing = setTimeout(() => { aplQuery = $('apl-q').value; rerender().then(() => { const input = $('apl-q'); input?.focus(); input?.setSelectionRange(input.value.length, input.value.length); }); }, 250); };
   if ($('apl-prev')) {
@@ -277,13 +297,13 @@ async function aplRender(target, activity, opts = {}) {
       target.querySelectorAll('[data-task]').forEach((r) => r.classList.toggle('is-selected', r === row));
       if ($('apl-edit')) { $('apl-edit').disabled = false; $('apl-del').disabled = false; }
     };
-    if (canEdit) row.ondblclick = (e) => { if (!e.target.closest('[data-add],[data-tog]')) aplOpenForm(activity, tasks, byId(row.dataset.task), null, rerender); };
+    if (canEdit) row.ondblclick = (e) => { if (!e.target.closest('[data-add],[data-tog]')) aplOpenForm(activity, tasks, byId(row.dataset.task), null, rerender, units); };
   });
   if (!canEdit) return;
-  $('apl-add-phase').onclick = () => aplOpenForm(activity, tasks, null, null, rerender);
+  $('apl-add-phase').onclick = () => aplOpenForm(activity, tasks, null, null, rerender, units);
   // With a main item selected, "สร้าง" adds a sub item under it (the + button per row was removed for space).
-  $('apl-new').onclick = () => { const sel = byId(aplSelected); aplOpenForm(activity, tasks, null, sel ? (sel.parent_id ?? sel.id) : null, rerender); };
-  $('apl-edit').onclick = () => { const task = byId(aplSelected); if (task) aplOpenForm(activity, tasks, task, null, rerender); };
+  $('apl-new').onclick = () => { const sel = byId(aplSelected); aplOpenForm(activity, tasks, null, sel ? (sel.parent_id ?? sel.id) : null, rerender, units); };
+  $('apl-edit').onclick = () => { const task = byId(aplSelected); if (task) aplOpenForm(activity, tasks, task, null, rerender, units); };
   $('apl-del').onclick = () => {
     const task = byId(aplSelected);
     if (!task) return;
@@ -342,7 +362,8 @@ function aplDrag(e, node, g, activity, tasks, kidsOf, rerender) {
   node.addEventListener('pointercancel', up);
 }
 
-function aplOpenForm(activity, tasks, task, parentId, rerender) {
+// units: the activity's projects (SMF) · a main item picks one, a sub item follows its main item.
+function aplOpenForm(activity, tasks, task, parentId, rerender, units = []) {
   const phases = tasks.filter((t) => t.parent_id == null && (!task || t.id !== task.id)).sort((a, b) => a.sort_no - b.sort_no);
   const pid = task ? task.parent_id : parentId;
   const derived = Boolean(task?.derived);
@@ -357,6 +378,7 @@ function aplOpenForm(activity, tasks, task, parentId, rerender) {
     // Said first: a main item with sub items takes its dates and % from them, so those fields are locked here.
     derived ? `<p class="apl-locked">ข้อหลักนี้มีข้อรอง ${kidCount} ข้อ: วันเริ่ม วันจบ และ % คิดจากข้อรองให้อัตโนมัติ · แก้วันหรือ % ที่ข้อรอง (ดับเบิลคลิกแถวข้อรอง) หรือลากแท่งข้อหลักเพื่อเลื่อนทั้งชุด · ที่นี่แก้ได้: ชื่อ ผู้รับผิดชอบ สี รายละเอียด</p>` : '',
     field('ระดับ', `<select id="apl-parent"${derived ? ' disabled' : ''}><option value="">ข้อหลัก</option>${phases.map((p) => `<option value="${p.id}"${p.id === pid ? ' selected' : ''}>ข้อรองของ: ${esc(p.title)}</option>`).join('')}</select>`),
+    units.length ? `<div id="apl-unit-wrap">${field('โครงการ', `<select id="apl-unit-f">${options(['', ...units.map((u) => u.code)], task ? task.unit || '' : aplUnit, (v) => (v ? units.find((u) => u.code === v)?.name || v : 'ไม่ระบุโครงการ'))}</select>`)}</div>` : '',
     field('ชื่อรายการ', `<input id="apl-title" maxlength="200" value="${esc(task?.title || '')}">`),
     a5EmpField('ผู้รับผิดชอบ', ownerId ? `${ownerId} · ${task.owner_name}` : ''),
     field('วันเริ่ม', `<input id="apl-start" type="date" ${range} value="${esc(start)}"${derived ? ' disabled' : ''}>`),
@@ -376,6 +398,7 @@ function aplOpenForm(activity, tasks, task, parentId, rerender) {
       ownerId,
       note: $('apl-note').value.trim(),
       color: document.querySelector('[name="apl-color"]:checked')?.value,
+      unit: $('apl-unit-f')?.value || null,
       startDate: $('apl-start').value,
       endDate: $('apl-end').value,
       progress: Number($('apl-pct').value),
@@ -393,7 +416,10 @@ function aplOpenForm(activity, tasks, task, parentId, rerender) {
     closePopup();
     rerender();
   });
-  const syncColor = () => { $('apl-color-wrap').hidden = Boolean($('apl-parent').value); };
+  const syncColor = () => {
+    $('apl-color-wrap').hidden = Boolean($('apl-parent').value);
+    if ($('apl-unit-wrap')) $('apl-unit-wrap').hidden = Boolean($('apl-parent').value);
+  };
   $('apl-parent').onchange = syncColor;
   syncColor();
   const syncDone = () => { $('apl-done-wrap').hidden = derived || Number($('apl-pct').value) < 100; };
@@ -407,6 +433,9 @@ const APL_DASH_TABS = { schedule: 'Schedule', team: 'Team' };
 // SMF (Smart Factory) oversees the main projects: its Dashboard opens on ภาพรวม of 5S, CFO and SMF (ผู้ใช้กำหนด 2026-11-01).
 const APL_DASH_TABS_OF = { smf: { overview: 'ภาพรวม', ...APL_DASH_TABS } };
 const APL_SET_TABS = { team: 'ทีม', plan: 'แผนงาน' };
+// SMF: its projects of the year come between ทีม and แผนงาน (ผู้ใช้กำหนด 2026-11-01)
+const APL_SET_TABS_OF = { smf: { team: 'ทีม', project: 'โครงการ', plan: 'แผนงาน' } };
+const APL_PROJECTS_ON = ['smf'];
 const APL_ROLE_LABEL = { ...ACT_TEAM_ROLES, auditor: 'ผู้ตรวจประเมิน' };
 // Team per activity (ผู้ใช้กำหนด 2026-10-29, docs/specs/act-teams.md); others use APL_ROLE_LABEL.
 // SMF = Smart Factory: Smart Team manages Setting (server accessOf), ที่ปรึกษา views.
@@ -453,6 +482,17 @@ async function aplDrawOverview(body) {
   ].join('');
   const row = (label, value) => `<div class="ov-row"><span>${label}</span><b>${value}</b></div>`;
   const section = (title, html) => `<div class="ov-sec"><div class="ov-sec-title">${title}</div>${html}</div>`;
+  // SMF: one line per project of the year (progress bar · items · overdue · team)
+  const projectHtml = (p) => {
+    const list = (p.projects || []).filter((u) => u.status === 'Active');
+    if (!list.length) return '';
+    return list.map((u) => {
+      const plan = p.plan?.byUnit?.[u.code];
+      const team = p.team?.units?.[u.code] || 0;
+      return `<div class="ov-proj"><div class="ov-proj-name">${esc(u.name)}</div><div class="ov-progress"><div class="ov-bar"><span style="width:${plan?.percent || 0}%"></span></div><b>${plan?.percent || 0}%</b></div>
+        <div class="sum-meta">${plan ? `${plan.items} หัวข้อ${plan.overdue ? ` · <span class="ov-bad">เลยกำหนด ${plan.overdue}</span>` : ''}` : 'ยังไม่มีแผน'} · ทีม ${team} คน</div></div>`;
+    }).join('');
+  };
   const planHtml = (p) => {
     if (!p.plan) return '<p class="sum-meta">ไม่มีแผนงาน (Project Planner)</p>';
     if (!p.plan.items) return '<p class="sum-meta">ยังไม่มีรายการแผนปีนี้</p>';
@@ -475,7 +515,8 @@ async function aplDrawOverview(body) {
   const teamHtml = (p) => {
     if (!p.team) return '<p class="sum-meta">ยังไม่ได้สร้างตารางทีม</p>';
     const labels = OV_UNIT_LABEL[p.activity] || {};
-    const units = Object.entries(p.team.units).map(([u, n]) => row(labels[u] || u, `${n} คน`)).join('');
+    const names = Object.fromEntries((p.projects || []).map((u) => [u.code, u.name]));
+    const units = Object.entries(p.team.units).map(([u, n]) => row(labels[u] || names[u] || u, `${n} คน`)).join('');
     const memberLabel = p.activity === '5s' ? 'สมาชิก' : 'ตัวแทนหน่วยงาน';
     return row('ทั้งหมด', `${ovNum(p.team.people)} คน`) + row('คณะกรรมการ', `${ovNum(p.team.committee)} คน`)
       + (p.team.smart ? row('Smart Team', `${p.team.smart} คน`) : '') + (p.team.members ? row(memberLabel, `${p.team.members} คน`) : '') + units;
@@ -488,17 +529,63 @@ async function aplDrawOverview(body) {
   };
   const cards = ps.map((p) => `<article class="card ov-card" style="--ov:${actColor(p.activity)}">
       <div class="ov-head"><strong>${esc(actLabel(p.activity))}</strong><span class="sum-meta">${p.activity === 'smf' ? 'Smart Factory' : p.activity === 'cfo' ? 'Carbon Footprint for Organization' : '5ส'}</span>${button('', 'เปิด Dashboard', 'secondary', `data-ov-go="${p.activity}-home"`)}</div>
-      ${section('ความคืบหน้าแผนงาน', planHtml(p))}${section('ผลลัพธ์หลัก', resultHtml(p))}${section('ทีม', teamHtml(p))}${section('ปัญหา / เลยกำหนด', problemHtml(p))}
+      ${section('ความคืบหน้าแผนงาน', planHtml(p))}${projectHtml(p) ? section(`โครงการปี ${data.year}`, projectHtml(p)) : ''}${section('ผลลัพธ์หลัก', resultHtml(p))}${section('ทีม', teamHtml(p))}${section('ปัญหา / เลยกำหนด', problemHtml(p))}
     </article>`).join('');
   body.innerHTML = `<div class="ch-kpis">${kpis}</div><div class="ov-grid">${cards}</div><p class="sum-meta">ข้อมูล ณ ${actShort(data.today)} ${data.year}</p>`;
   body.querySelectorAll('[data-ov-go]').forEach((node) => { node.onclick = () => openView(node.dataset.ovGo); });
   a5Lift(body);
 }
 
+// { '': committee, code: name } of the year's projects, or null when the activity has none (a5SetTeam unitsIn).
+async function aplUnitsOf(activity) {
+  if (!APL_PROJECTS_ON.includes(activity)) return null;
+  const { projects } = await a5Api(activity, `projects?year=${a5Year}`);
+  return { '': `คณะกรรมการ ${actLabel(activity)}`, ...Object.fromEntries(projects.filter((p) => p.status === 'Active').map((p) => [p.code, p.name])) };
+}
+
+// Setting > โครงการ (SMF): the year's projects, add / edit / delete, copy from last year.
+async function aplSetProjects(body, activity, admin, rerender) {
+  const { projects } = await a5Api(activity, `projects?year=${a5Year}`);
+  let picked = null;
+  body.innerHTML = `
+    ${admin ? `<div class="action-bar a5-actions">${button('apl-p-add', 'เพิ่มโครงการ', 'primary')}${button('apl-p-edit', 'แก้ไข', 'secondary', 'disabled')}${button('apl-p-del', 'ลบ', 'danger', 'disabled')}${button('apl-p-copy', `คัดลอกจากปี ${a5Year - 1}`)}</div>` : ''}
+    <div class="table-wrap sheet" id="apl-p-rows"></div>
+    <p class="sum-meta">${projects.length} โครงการ ปี ${a5Year} · แต่ละโครงการมีทีม (Setting > ทีม เลือก ทีม = โครงการ) และแผนงาน (ข้อหลักเลือกโครงการ) ของตัวเอง</p>`;
+  fillTable('apl-p-rows', ['ลำดับ', 'รหัส', 'ชื่อโครงการ', 'สถานะ'], projects.map((p) => `<tr data-pick="${p.id}"><td>${p.sort_no}</td><td>${esc(p.code)}</td><td>${esc(p.name)}</td><td>${esc(p.status)}</td></tr>`).join(''), `ยังไม่มีโครงการปี ${a5Year}`);
+  a5Lift(body);
+  if (!admin) return;
+  bindRowSelect($('apl-p-rows'), (id) => { picked = projects.find((p) => String(p.id) === id); $('apl-p-edit').disabled = !picked; $('apl-p-del').disabled = !picked; });
+  const form = (p) => openPopup(p ? `แก้ไขโครงการ ${esc(p.name)}` : `เพิ่มโครงการปี ${a5Year}`, [
+    field('ชื่อโครงการ', `<input id="apl-p-name" maxlength="120" value="${esc(p?.name || '')}" placeholder="เช่น Smart OEE">`),
+    field('รหัส (a–z 0–9 ใช้ผูกทีมและแผน)', `<input id="apl-p-code" maxlength="20" value="${esc(p?.code || '')}" placeholder="เช่น oee">`),
+    field('ลำดับ', `<input id="apl-p-sort" type="number" min="1" value="${p?.sort_no || projects.length + 1}">`),
+    field('สถานะ', `<select id="apl-p-status">${options(['Active', 'Inactive'], p?.status || 'Active')}</select>`)
+  ].join(''), async () => {
+    const payload = { year: a5Year, name: $('apl-p-name').value, code: $('apl-p-code').value, sortNo: Number($('apl-p-sort').value), status: $('apl-p-status').value };
+    await a5Api(activity, p ? `projects/${p.id}` : 'projects', { method: p ? 'PATCH' : 'POST', body: payload });
+    toast('บันทึกแล้ว');
+    closePopup();
+    rerender();
+  });
+  $('apl-p-add').onclick = () => form(null);
+  $('apl-p-edit').onclick = () => picked && form(picked);
+  $('apl-p-del').onclick = () => picked && confirmPopup('ลบโครงการ', `ตรวจ ${esc(picked.name)} อีกครั้งก่อนลบ (ถ้ามีทีมหรือแผนงานแล้วจะเปลี่ยนเป็น Inactive แทน)`, async () => {
+    const r = await a5Api(activity, `projects/${picked.id}`, { method: 'DELETE' });
+    toast(r.inactive ? 'มีทีม / แผนงานแล้ว จึงเปลี่ยนเป็น Inactive' : 'ลบแล้ว');
+    rerender();
+  });
+  $('apl-p-copy').onclick = () => confirmPopup('คัดลอกโครงการ', `คัดลอกรายชื่อโครงการปี ${a5Year - 1} มาเป็นปี ${a5Year} (รหัสที่มีอยู่แล้วไม่ซ้ำ)`, async () => {
+    const r = await a5Api(activity, 'projects/copy', { method: 'POST', body: { from: a5Year - 1, to: a5Year } });
+    toast(`คัดลอก ${r.copied} โครงการ`);
+    rerender();
+  }, 'คัดลอก');
+}
+
 async function aplDrawTeam(body, activity, admin) {
   let data;
+  let units = null;
   try {
-    data = await a5Api(activity, `team?year=${a5Year}`);
+    [data, units] = await Promise.all([a5Api(activity, `team?year=${a5Year}`), aplUnitsOf(activity)]);
   } catch (err) {
     body.innerHTML = `<p class="empty">${esc(err.message)}</p>`;
     return;
@@ -506,14 +593,24 @@ async function aplDrawTeam(body, activity, admin) {
   const active = (data.members || []).filter((m) => m.status === 'Active');
   const person = (m) => `<div class="a5-person">${esc(m.employee_id)} · ${esc(m.name || '-')}<span>${esc(m.department || (m.team ? `ทีม ${m.team}` : ''))}</span></div>`;
   const actName = actLabel(activity);
+  const roleLabels = aplRolesOf(activity);
+  // project teams (SMF): one card per project, its people with their role
+  const projectCards = units ? Object.entries(units).filter(([code]) => code).map(([code, name], i) => {
+    const list = active.filter((m) => m.unit === code);
+    const people = ['chairman', 'vice', 'advisor', 'admin', 'member'].flatMap((role) => list.filter((m) => m.role === role).map((m) => `<div class="a5-person">${esc(m.employee_id)} · ${esc(m.name || '-')}<span>${esc(role === 'member' ? 'สมาชิก' : roleLabels[role] || role)}</span></div>`)).join('');
+    return `<div class="a5-team" style="--team:${CHART.series[(i + 2) % CHART.series.length]}"><div class="a5-team-head">${esc(name)}<span>${list.length} คน</span></div>${people || '<div class="a5-person sum-meta">ยังไม่มีรายชื่อ</div>'}</div>`;
+  }).join('') : '';
+  const top = units ? active.filter((m) => !m.unit) : active;
   body.innerHTML = `
     ${admin ? `<div class="action-bar a5-actions">${button('apl-team-edit', 'แก้ไขทีม')}</div>` : ''}
-    <div class="a5-team-grid">${Object.entries(aplRolesOf(activity)).map(([role, label], i) => {
-      const list = active.filter((m) => m.role === role);
+    ${units ? `<div class="a5-team-title"><span class="material-symbols-rounded">groups</span>${esc(units[''])}</div>` : ''}
+    <div class="a5-team-grid">${Object.entries(roleLabels).map(([role, label], i) => {
+      const list = top.filter((m) => m.role === role);
       if (!list.length && (role === 'auditor' || (role === 'member' && !active.some((m) => m.role === 'member')))) return '';
       return `<div class="a5-team" style="--team:${CHART.series[i % CHART.series.length]}"><div class="a5-team-head">${esc(label)}<span>${list.length} คน</span></div>${list.map(person).join('') || '<div class="a5-person">-</div>'}</div>`;
     }).join('')}</div>
-    <p class="sum-meta">โครงสร้างทีม ${esc(actName)} ปี ${a5Year} · ${active.length} คน</p>`;
+    ${projectCards ? `<div class="a5-team-title"><span class="material-symbols-rounded">account_tree</span>โครงการ</div><div class="a5-team-grid">${projectCards}</div>` : ''}
+    <p class="sum-meta">โครงสร้างทีม ${esc(actName)} ปี ${a5Year} · ${active.length} รายชื่อ</p>`;
   a5Lift(body);
   if (admin && $('apl-team-edit')) $('apl-team-edit').onclick = () => {
     aplSetTab[activity] = 'team';
@@ -524,9 +621,10 @@ async function aplDrawTeam(body, activity, admin) {
 async function aplSetting(target, activity) {
   const me = await a5Api(activity, `me?year=${a5Year}`);
   const admin = me.access.admin;
-  const tab = aplSetTab[activity] || 'team';
+  const tabs = APL_SET_TABS_OF[activity] || APL_SET_TABS;
+  const tab = tabs[aplSetTab[activity]] ? aplSetTab[activity] : 'team';
   target.innerHTML = `<div class="view-body"><section class="card">
-    ${pageBar(a5Seg('data-aplset', APL_SET_TABS, tab), `<div class="a5-year">${a5YearSelect(me.years)}</div>`, 'a5')}
+    ${pageBar(a5Seg('data-aplset', tabs, tab), `<div class="a5-year">${a5YearSelect(me.years)}</div>`, 'a5')}
     <div id="a5-body"><div class="empty">กำลังโหลด...</div></div>
   </section></div>`;
   const rerender = () => aplSetting(target, activity).catch(onErr);
@@ -535,9 +633,10 @@ async function aplSetting(target, activity) {
   });
   if ($('a5-year')) $('a5-year').onchange = () => { a5Year = Number($('a5-year').value); rerender(); };
   const body = $('a5-body');
+  if (tab === 'project') return aplSetProjects(body, activity, admin, rerender);
   if (tab === 'team') {
     try {
-      return await a5SetTeam(body, activity, admin, rerender, aplRolesOf(activity));
+      return await a5SetTeam(body, activity, admin, rerender, aplRolesOf(activity), await aplUnitsOf(activity));
     } catch (err) {
       body.innerHTML = `<p class="empty">${esc(err.message)}</p>`;
       return;

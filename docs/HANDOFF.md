@@ -6,6 +6,8 @@
 
 ## SQL ที่รอผู้ใช้รัน
 
+- [SMF] `db/act/smf.sql` (หรือ `db/setup.sql`) ใน activity01: ตาราง `mt_smf_project` + 3 โครงการ 2026 และคอลัมน์ `unit` ของแผนงาน
+
 - `db/act/cfo.sql` ใน Supabase activity01 (5S + ตารางกลางรันแล้ว) · ฐานว่างใหม่ใช้ `db/setup.sql` ไฟล์เดียว
 
 ## ข้อควรระวัง
@@ -15,6 +17,8 @@
 - ข้อมูลเดิมจาก TSAT4 SMF (พนักงาน, ผลตรวจ 5S, CFO) ยังไม่ได้ย้ายมา · มีไฟล์นำเข้า `inbox/import_5s.sql`, `inbox/import_cfo.sql` (ไม่อยู่ใน git) ทดสอบแล้วใน test:act
 
 ## บันทึก (อันใหม่อยู่บนสุด)
+
+- 2026-11-01 · Claude [SMF] · SMF มีโครงการรายปี (`mt_smf_project`, 2026: Smart OEE · Vision Camera · Work Flow Automation): Setting > โครงการ (เพิ่ม/แก้ไข/ลบ/คัดลอกปี) · ทีมต่อโครงการ (`unit`) · ข้อหลักของแผนเลือกโครงการ (`mt_<act>_task.unit` ทุกกิจกรรม) Gantt จัดกลุ่ม + ตัวกรอง · ภาพรวม/Team แสดงต่อโครงการ · `unitsOf` / `projectsOf` ใน common.js
 
 - 2026-11-01 · Claude · แยกงานให้หลาย AI: `Activity\5S` (branch main) + `Activity\SMF` (git worktree branch smf, inbox = junction ไป 5S) · ตารางว่าใครดูแลไฟล์ไหนอยู่ใน AGENTS.md หัวข้อ 0.1 · `Activity\CFO` เป็นสำเนา CFO แยกเดิม (repo อื่น) ผู้ใช้ให้คงไว้
 

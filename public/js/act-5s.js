@@ -323,8 +323,9 @@ async function a5SetAreas(body, activity, admin, rerender) {
 
 // roles: { role: label } this activity uses (5S: A5_ROLE_LABEL by sub-team · CFO: + member + department).
 // Activities with sub-teams (A5_UNITS_OF) pick ทีม first; the role list follows that team (a5RolesOf).
-async function a5SetTeam(body, activity, admin, rerender, roles = A5_ROLE_LABEL) {
-  const units = A5_UNITS_OF[activity] || null;
+// unitsIn: { '': committee label, code: project name } for activities whose sub-teams are their projects (SMF).
+async function a5SetTeam(body, activity, admin, rerender, roles = A5_ROLE_LABEL, unitsIn = null) {
+  const units = unitsIn || A5_UNITS_OF[activity] || null;
   const keys = Object.keys(roles);
   const [data, areasData] = await Promise.all([a5Api(activity, `team?year=${a5Year}`),
     keys.includes('owner') ? a5Api(activity, `areas?year=${a5Year}`).catch(() => ({ areas: [] })) : { areas: [] }]);
@@ -333,13 +334,15 @@ async function a5SetTeam(body, activity, admin, rerender, roles = A5_ROLE_LABEL)
   const hasTeam = keys.includes('auditor');
   const unitKeys = units ? Object.keys(units) : [''];
   const unitOf = (m) => m.unit || (units && ['owner', 'auditor'].includes(m.role) ? 'audit' : '');
-  const rows = listQuery([...data.members].sort((a, b) => unitKeys.indexOf(unitOf(a)) - unitKeys.indexOf(unitOf(b)) || keys.indexOf(a.role) - keys.indexOf(b.role) || String(a.team || '').localeCompare(String(b.team || '')) || String(a.area_code || '').localeCompare(String(b.area_code || '')) || String(a.employee_id).localeCompare(String(b.employee_id))), a5Heads.team, (m, key) => (key === 'role' ? roles[m.role] || m.role : key === 'unit' ? units[unitOf(m)] : m[key] || ''));
+  // in a project team (SMF) a member is สมาชิก, not the committee's ตัวแทนหน่วยงาน
+  const roleLabel = (role, unit) => (role === 'member' && unit && !A5_UNITS_OF[activity] ? 'สมาชิก' : roles[role] || role);
+  const rows = listQuery([...data.members].sort((a, b) => unitKeys.indexOf(unitOf(a)) - unitKeys.indexOf(unitOf(b)) || keys.indexOf(a.role) - keys.indexOf(b.role) || String(a.team || '').localeCompare(String(b.team || '')) || String(a.area_code || '').localeCompare(String(b.area_code || '')) || String(a.employee_id).localeCompare(String(b.employee_id))), a5Heads.team, (m, key) => (key === 'role' ? roleLabel(m.role, unitOf(m)) : key === 'unit' ? units[unitOf(m)] : m[key] || ''));
   body.innerHTML = `
     ${admin ? `<div class="action-bar a5-actions">${button('a5-add', 'เพิ่มรายชื่อ', 'primary')}${button('a5-edit', 'แก้ไข', 'secondary', 'disabled')}${button('a5-del', 'ลบ', 'danger', 'disabled')}${button('a5-copy', `คัดลอกจากปี ${a5Year - 1}`)}</div>` : ''}
     <div class="table-wrap sheet" id="a5-rows"></div>
     <p class="sum-meta">${rows.length} รายชื่อ</p>`;
   const teamCell = (m) => (hasTeam ? `<td>${m.team ? `<span class="a5-dot is-done" style="--team:${a5TeamColor(m.team)}"></span> กลุ่ม ${esc(m.team)}` : (m.area_code ? `<span class="sum-meta">[${esc(m.area_code)}]</span> ${esc(m.area_name || '')}` : '')}</td>` : '');
-  fillTable('a5-rows', [...(units ? [{ label: 'ทีม', key: 'unit' }] : []), { label: 'บทบาท', key: 'role' }, ...(hasTeam ? [{ label: 'กลุ่มตรวจ / พื้นที่', key: 'team' }] : []), { label: 'รหัส', key: 'employee_id' }, { label: 'ชื่อ', key: 'name' }, { label: 'หน่วยงาน', key: 'department' }, { label: 'สถานะ', key: 'status' }], rows.map((m) => `<tr data-pick="${m.id}">${units ? `<td>${esc(units[unitOf(m)])}</td>` : ''}<td>${esc(roles[m.role] || m.role)}</td>${teamCell(m)}<td>${esc(m.employee_id)}</td><td>${esc(m.name)}</td><td>${esc(m.department)}</td><td>${esc(m.status)}</td></tr>`).join(''), `ยังไม่มีทีมปี ${a5Year}`, headFor(a5Heads.team, () => a5SetTeam(body, activity, admin, rerender, roles).catch(onErr)));
+  fillTable('a5-rows', [...(units ? [{ label: 'ทีม', key: 'unit' }] : []), { label: 'บทบาท', key: 'role' }, ...(hasTeam ? [{ label: 'กลุ่มตรวจ / พื้นที่', key: 'team' }] : []), { label: 'รหัส', key: 'employee_id' }, { label: 'ชื่อ', key: 'name' }, { label: 'หน่วยงาน', key: 'department' }, { label: 'สถานะ', key: 'status' }], rows.map((m) => `<tr data-pick="${m.id}">${units ? `<td>${esc(units[unitOf(m)])}</td>` : ''}<td>${esc(roleLabel(m.role, unitOf(m)))}</td>${teamCell(m)}<td>${esc(m.employee_id)}</td><td>${esc(m.name)}</td><td>${esc(m.department)}</td><td>${esc(m.status)}</td></tr>`).join(''), `ยังไม่มีทีมปี ${a5Year}`, headFor(a5Heads.team, () => a5SetTeam(body, activity, admin, rerender, roles, unitsIn).catch(onErr)));
   a5Lift(body);
   if (!admin) return;
   bindRowSelect($('a5-rows'), (id) => { picked = rows.find((m) => String(m.id) === id); $('a5-edit').disabled = !picked; $('a5-del').disabled = !picked; });
@@ -347,14 +350,16 @@ async function a5SetTeam(body, activity, admin, rerender, roles = A5_ROLE_LABEL)
   const form = (m) => {
     let chosen = m ? { employeeId: m.employee_id, name: m.name } : null;
     const unit0 = m ? unitOf(m) : '';
-    const roleOptions = (unit, current) => options(units ? a5RolesOf(unit).filter((r) => keys.includes(r)) : keys, current || '', (v) => roles[v]);
+    // 5S: a5RolesOf · project teams (SMF): the four leads + สมาชิก · the committee: every role of the activity
+    const rolesFor = (unit) => (!units ? keys : A5_UNITS_OF[activity] ? a5RolesOf(unit) : unit ? ['chairman', 'vice', 'advisor', 'admin', 'member'] : keys.filter((r) => !['owner', 'auditor'].includes(r)));
+    const roleOptions = (unit, current) => options(rolesFor(unit).filter((r) => keys.includes(r)), current || '', (v) => roleLabel(v, unit));
     const who = m ? field('พนักงาน', `<input value="${esc(`${m.employee_id} · ${m.name || ''}`)}" disabled>`) : a5EmpField('พนักงาน');
     openPopup(m ? `แก้ไขรายชื่อปี ${a5Year}` : `เพิ่มรายชื่อปี ${a5Year}`, `${who}
       ${units ? field('ทีม', `<select id="a5-unit">${options(unitKeys, unit0, (v) => units[v])}</select>`) : ''}
       ${field('บทบาท', `<select id="a5-role">${roleOptions(unit0, m?.role)}</select>`)}
       ${hasTeam ? field('กลุ่มตรวจ (เฉพาะผู้ตรวจประเมิน)', `<select id="a5-team">${options(A5_TEAMS, m?.team || 'A', (t) => `กลุ่ม ${t}`)}</select>`, '') : ''}
       ${keys.includes('owner') && areasList.length ? field('พื้นที่ (เฉพาะผู้รับผิดชอบพื้นที่)', `<select id="a5-owner-area">${options(areasList.map((a) => a.id), m?.area_id || areasList[0]?.id, (id) => { const a = areasList.find((x) => String(x.id) === String(id)); return a ? `${a.code} - ${a.name}` : id; })}</select>`, '') : ''}
-      ${keys.includes('member') && !units ? field('หน่วยงาน (เฉพาะสมาชิก)', `<input id="a5-dept" maxlength="80" placeholder="เช่น PD1" value="${esc(m?.department || '')}">`) : ''}
+      ${keys.includes('member') && !A5_UNITS_OF[activity] ? field('หน่วยงาน (เฉพาะสมาชิกที่ไม่อยู่ในโครงการ)', `<input id="a5-dept" maxlength="80" placeholder="เช่น PD1" value="${esc(m?.department || '')}">`) : ''}
       ${m ? field('สถานะ', `<select id="a5-status">${options(['Active', 'Inactive'], m.status)}</select>`) : ''}`, async () => {
       if (!chosen) throw new Error('เลือกพนักงานจากรายชื่อก่อน');
       const r = $('a5-role').value;
@@ -378,7 +383,7 @@ async function a5SetTeam(body, activity, admin, rerender, roles = A5_ROLE_LABEL)
       const r = $('a5-role').value;
       show('a5-team', r === 'auditor');
       show('a5-owner-area', r === 'owner');
-      show('a5-dept', r === 'member');
+      show('a5-dept', r === 'member' && !$('a5-unit')?.value);
     };
     if ($('a5-unit')) $('a5-unit').onchange = () => { $('a5-role').innerHTML = roleOptions($('a5-unit').value, $('a5-role').value); syncRole(); };
     $('a5-role').onchange = syncRole;

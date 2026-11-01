@@ -76,6 +76,8 @@ create table if not exists public.mt_5s_task (
 create index if not exists mt_5s_task_year on public.mt_5s_task (year, parent_id, sort_no);
 -- วันที่ทำครบ 100% (server ใส่ให้) ใช้บอกเสร็จก่อนแผน / ตามแผน / ช้า เทียบกับ end_date · เพิ่มทีหลัง จึงใช้ add column (รันซ้ำได้)
 alter table public.mt_5s_task add column if not exists done_on date;
+-- โครงการ / ทีมย่อยของข้อหลัก (SMF: mt_smf_project.code) · ข้อรองตามข้อหลัก (ผู้ใช้กำหนด 2026-11-01)
+alter table public.mt_5s_task add column if not exists unit text;
 
 -- ===== 5s: checklist audit =====
 

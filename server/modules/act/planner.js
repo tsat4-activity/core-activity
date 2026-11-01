@@ -1,6 +1,6 @@
 import { tx } from '../../core/db.js';
 import { fail } from '../../core/http.js';
-import { accessOf, actRoute, dateOf, fetchAll, must, namesOf, requireAdmin, tablesOf, yearOf } from './common.js';
+import { accessOf, actRoute, dateOf, fetchAll, must, namesOf, projectsOf, requireAdmin, tablesOf, unitsOf, yearOf } from './common.js';
 
 // Project Planner (100P, 5S): one year's plan as main items (parent_id null) with sub items, shown as a Gantt with
 // year (W1–W4) and month (day) views. Everyone reads; the year's admins create, edit, drag and delete.
@@ -75,7 +75,7 @@ function datesIn(year, startRaw, endRaw) {
   return { start, end };
 }
 
-function input(body, year, hasKids) {
+function input(body, year, hasKids, units = []) {
   const title = String(body.title || '').trim().slice(0, 200);
   if (!title) return { error: 'ระบุชื่อรายการ' };
   const parentId = body.parentId == null || body.parentId === '' ? null : Number(body.parentId);
@@ -85,8 +85,11 @@ function input(body, year, hasKids) {
     parent_id: hasKids ? null : parentId,
     owner_id: String(body.ownerId || '').trim().slice(0, 40) || null,
     note: String(body.note || '').trim().slice(0, 2000) || null,
-    color: parentId == null && COLORS.includes(body.color) ? body.color : null
+    color: parentId == null && COLORS.includes(body.color) ? body.color : null,
+    // โครงการ (SMF) belongs to the main item; sub items follow their main item
+    unit: parentId == null && units.includes(body.unit) ? body.unit : null
   };
+  if (parentId == null && body.unit && !units.includes(body.unit)) return { error: 'โครงการไม่ถูกต้อง' };
   if (hasKids) return { row };
   const progress = Number(body.progress ?? 0);
   if (!Number.isInteger(progress) || progress < 0 || progress > 100) return { error: '% ต้องเป็น 0–100' };
@@ -136,6 +139,7 @@ export function mountPlanner(app) {
     const names = await namesOf(rows.map((r) => r.owner_id));
     res.json({
       year,
+      units: await projectsOf(activity, year),
       canEdit: (await accessOf(req, activity, year)).admin,
       tasks: withSpans(rows).map((row) => ({ ...row, plan: planStatus(row), owner_name: row.owner_id ? names.get(String(row.owner_id))?.name || row.owner_id : '' }))
     });
@@ -144,7 +148,7 @@ export function mountPlanner(app) {
   route('post', '/api/act/:activity/tasks', async (req, res, activity, t) => {
     const year = yearOf(req.body?.year);
     if (!year || !(await requireAdmin(req, res, activity, year))) return;
-    const { row, error: invalid } = input(req.body || {}, year, false);
+    const { row, error: invalid } = input(req.body || {}, year, false, await unitsOf(activity, year, true));
     const bad = invalid || await badParent(t.task, year, row.parent_id, null);
     if (bad) return fail(res, 400, bad);
     const insert = { ...row, year, sort_no: await nextSort(t.task, year, row.parent_id), created_by: req.user.employeeId };
@@ -179,7 +183,8 @@ export function mountPlanner(app) {
     if (!current) return fail(res, 404, 'ไม่พบรายการ');
     if (!(await requireAdmin(req, res, activity, current.year))) return;
     const hasKids = (await kidCount(t.task, current.id)) > 0;
-    const { row, error: invalid } = input(req.body || {}, current.year, hasKids);
+    const units = await unitsOf(activity, current.year, true);
+    const { row, error: invalid } = input(req.body || {}, current.year, hasKids, current.unit && !units.includes(current.unit) ? [...units, current.unit] : units);
     if (!invalid && hasKids && req.body?.parentId) return fail(res, 400, 'ข้อหลักที่มีข้อรองย้ายไปเป็นข้อรองไม่ได้');
     const bad = invalid || await badParent(t.task, current.year, row.parent_id, current.id);
     if (bad) return fail(res, 400, bad);

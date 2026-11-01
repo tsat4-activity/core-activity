@@ -1,7 +1,7 @@
 import { tx } from '../../core/db.js';
 import { fail, wrap } from '../../core/http.js';
 import { requireUser } from '../../core/users.js';
-import { ACTIVITIES, AUDIT_UNIT, fetchAll, tablesOf, yearOf } from './common.js';
+import { ACTIVITIES, AUDIT_UNIT, fetchAll, projectsOf, tablesOf, yearOf } from './common.js';
 import { PLANNER_ON, planStatus, withSpans } from './planner.js';
 import { shownStatus } from './transaction.js';
 import { CFO_ON } from './cfo.js';
@@ -23,10 +23,8 @@ const daysOf = (start, end) => Math.round((Date.parse(end) - Date.parse(start)) 
 const round = (n, d = 1) => Math.round(n * 10 ** d) / 10 ** d;
 const avg = (list) => (list.length ? list.reduce((s, v) => s + v, 0) / list.length : 0);
 
-// Main items of the year: overall % (weighted by days), how many are ahead / on plan / behind, and late items at any level.
-async function planOf(activity, year, today) {
-  if (!PLANNER_ON.includes(activity)) return null;
-  const rows = withSpans(await fetchAll(() => tx.from(tablesOf(activity).task).select('*').eq('year', year).order('sort_no').order('id')));
+// Main items: overall % (weighted by days), how many are ahead / on plan / behind, and late items at any level.
+function planSummary(rows, today) {
   const mains = rows.filter((r) => r.parent_id == null);
   const dated = mains.filter((r) => r.start_date && r.end_date);
   const days = dated.reduce((s, r) => s + daysOf(r.start_date, r.end_date), 0);
@@ -38,6 +36,17 @@ async function planOf(activity, year, today) {
   }
   const overdue = rows.filter((r) => planStatus(r, today).code === 'overdue').map((r) => ({ title: r.title, end: r.end_date, progress: r.progress }));
   return { items: mains.length, percent, counts, overdue: overdue.length, late: overdue.sort((a, b) => a.end.localeCompare(b.end)).slice(0, 5) };
+}
+
+// The year's plan, and per project (SMF: main item unit; sub items follow their main item).
+async function planOf(activity, year, today) {
+  if (!PLANNER_ON.includes(activity)) return null;
+  const rows = withSpans(await fetchAll(() => tx.from(tablesOf(activity).task).select('*').eq('year', year).order('sort_no').order('id')));
+  const unitOfMain = new Map(rows.filter((r) => r.parent_id == null).map((r) => [Number(r.id), r.unit || '']));
+  const unitOf = (r) => (r.parent_id == null ? r.unit || '' : unitOfMain.get(Number(r.parent_id)) || '');
+  const byUnit = {};
+  for (const code of new Set(rows.map(unitOf))) if (code) byUnit[code] = planSummary(rows.filter((r) => unitOf(r) === code), today);
+  return { ...planSummary(rows, today), byUnit };
 }
 
 // Active team of the year: the committee's leads, its members / Smart Team, each sub-team, and how many people in all.
@@ -111,7 +120,7 @@ export function mountOverview(app) {
         safe(() => teamOf(activity, year)),
         safe(() => (activity === '5s' ? fiveS(year, today) : CFO_ON.includes(activity) ? cfo(year) : null))
       ]);
-      return { activity, plan, team, results };
+      return { activity, plan, team, results, projects: await safe(() => projectsOf(activity, year)) };
     }));
     res.json({ year, today, projects });
   }));

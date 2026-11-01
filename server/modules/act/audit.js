@@ -1,7 +1,7 @@
 import { mx, tx } from '../../core/db.js';
 import { fail, cleanTerm } from '../../core/http.js';
 import { nameOf } from '../../core/users.js';
-import { ACT_UNITS, AUDIT_UNIT, accessOf, actRoute, fetchAll, fetchIn, namesOf, requireAdmin, roundTo, tablesOf, throwIf, yearOf } from './common.js';
+import { ACT_UNITS, AUDIT_UNIT, unitsOf, accessOf, actRoute, fetchAll, fetchIn, namesOf, requireAdmin, roundTo, tablesOf, throwIf, yearOf } from './common.js';
 
 // Checklist audits (5S and similar): Dashboard reads for everyone, Setting writes for the year's admins.
 // Tables (Tx Data, one set per activity): db/act/<activity>.sql via tablesOf() · rules: docs/specs/act-5s.md
@@ -302,12 +302,11 @@ export function mountAudit(app) {
   });
 
   // Where one team row sits: role + sub-team + audit group / area / department, checked the same way for add and edit.
-  const placementOf = (activity, body) => {
+  const placementOf = (activity, body, units) => {
     const role = ROLES.includes(body?.role) ? body.role : '';
-    const units = ACT_UNITS[activity] || [];
     if (body?.unit && !units.includes(body.unit)) return { error: 'ทีมย่อยไม่ถูกต้อง' };
-    // owner / auditor always sit in ทีมตรวจประเมิน when the activity has sub-teams
-    const unit = units.length && AUDIT_ONLY.includes(role) ? AUDIT_UNIT : units.includes(body?.unit) ? body.unit : null;
+    // owner / auditor always sit in ทีมตรวจประเมิน when the activity has an audit team (5S)
+    const unit = units.includes(AUDIT_UNIT) && AUDIT_ONLY.includes(role) ? AUDIT_UNIT : units.includes(body?.unit) ? body.unit : null;
     const team = role === 'auditor' ? String(body?.team || '').trim().toUpperCase() : null;
     const areaId = role === 'owner' && body?.areaId ? Number(body.areaId) : null;
     const department = role === 'member' && !unit ? String(body?.department || '').trim().slice(0, 80) : '';
@@ -323,7 +322,7 @@ export function mountAudit(app) {
     if (!year || !(await requireAdmin(req, res, activity, year))) return;
     const employeeId = String(req.body?.employeeId || '').trim();
     if (!employeeId) return fail(res, 400, 'เลือกพนักงาน');
-    const place = placementOf(activity, req.body);
+    const place = placementOf(activity, req.body, await unitsOf(activity, year, true));
     if (place.error) return fail(res, 400, place.error);
     const member = place.role === 'member';
     const targetCount = member && req.body?.targetCount != null && req.body.targetCount !== '' ? Math.max(0, Math.floor(Number(req.body.targetCount) || 0)) : undefined;
@@ -347,7 +346,9 @@ export function mountAudit(app) {
     const patch = {};
     if (req.body?.status) patch.status = req.body.status === 'Inactive' ? 'Inactive' : 'Active';
     if (req.body?.role !== undefined) {
-      const place = placementOf(activity, req.body);
+      // a row may keep the project it already has even if that project was closed since
+      const units = await unitsOf(activity, row.year, true);
+      const place = placementOf(activity, req.body, row.unit && !units.includes(row.unit) ? [...units, row.unit] : units);
       if (place.error) return fail(res, 400, place.error);
       const self = String(row.employee_id) === req.user.employeeId && !req.user.creator;
       if (self && row.role === 'admin' && !row.unit && (place.role !== 'admin' || place.unit || patch.status === 'Inactive')) return fail(res, 400, 'นำสิทธิ์ผู้ประสานงานของตัวเองออกไม่ได้');

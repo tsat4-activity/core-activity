@@ -20,7 +20,7 @@ TSAT4 Activity = ระบบกิจกรรม 5S · CFO · SMF เว็บ
 | โฟลเดอร์ | branch | ดูแลหลัก (แก้ได้เต็มที่) |
 |---|---|---|
 | `C:\Work\projects\Activity\5S` | `main` | 5S: `public/js/act-5s.js`, `public/js/act-tx.js`, `server/modules/act/audit.js`, `server/modules/act/transaction.js`, `db/act/5s*.sql`, `docs/specs/act-5s.md` · งาน CFO ของเว็บนี้ทำที่นี่ด้วย (`act-cfo.js`, `cfo.js`, `db/act/cfo.sql`) |
-| `C:\Work\projects\Activity\SMF` | `smf` | SMF + ภาพรวม: `public/js/act-planner.js`, `server/modules/act/planner.js`, `server/modules/act/overview.js`, `db/act/smf.sql`, `docs/specs/act-smf.md`, `docs/specs/act-planner.md` |
+| `C:\Work\projects\Activity\SMF` | `smf` | SMF + ภาพรวม: `public/js/act-planner.js`, `server/modules/act/planner.js`, `server/modules/act/overview.js`, `server/modules/act/smf.js` (โครงการ SMF), `db/act/smf.sql`, `docs/specs/act-smf.md`, `docs/specs/act-planner.md` |
 | `C:\Work\projects\Activity\CFO` | (repo อื่น) | สำเนา CFO แยกเดิม ไม่ใช่เว็บนี้ ไม่มี GitHub · **ห้ามคัดลอกโค้ดจากที่นั่นทับเว็บนี้** |
 
 - **ไฟล์กลาง** แตะได้ทุกตัวแต่แก้เท่าที่จำเป็นและ commit ให้เร็ว: `public/js/core.js`, `public/js/act.js`, `public/js/system.js`, `public/js/units.js`, `public/app.css`, `public/index.html`, `server/core/*`, `server/modules/act/common.js`, `server/modules/act/index.js`, `server/modules/system/*`, `scripts/*`, `db/00_main.sql`, `db/setup.sql`, `docs/*` (HANDOFF / AGENTS / ARCHITECTURE)
