@@ -51,6 +51,93 @@ function cropJpeg(file, width, height) {
   });
 }
 
+// Excel-style entry grid for "เพิ่ม" popups (ผู้ใช้กำหนด 2026-11-01): type in the cells, or copy rows in Excel and paste
+// (Ctrl+V) into any cell; the rows grow to fit. cols: [{ key, label, type: 'text' | 'number' | 'select', options: [[value, label]],
+// value: default, width }] · a select cell takes a pasted value or label (also part of a label, e.g. "สะสาง").
+function gridField(id, cols, rows = 5, note = 'คัดลอกหลายแถวจาก Excel แล้ววาง (Ctrl+V) ที่ช่องไหนก็ได้ · แถวว่างไม่บันทึก') {
+  const head = cols.map((c) => `<th style="${c.width ? `width:${c.width}` : ''}">${esc(c.label)}</th>`).join('');
+  return `<div class="grid-edit" id="${id}" data-cols="${esc(JSON.stringify(cols))}"><div class="table-wrap"><table class="mo-data-table"><thead><tr><th class="grid-no">#</th>${head}<th class="grid-x"></th></tr></thead>
+    <tbody>${Array.from({ length: rows }, () => gridRowHtml(cols)).join('')}</tbody></table></div>
+    <div class="grid-foot"><button class="apl-link" type="button" data-grid-add>+ เพิ่มแถว</button><span class="sum-meta">${note}</span></div></div>`;
+}
+
+function gridRowHtml(cols, values = {}) {
+  const cell = (c) => {
+    const v = values[c.key] ?? c.value ?? '';
+    if (c.type === 'select') return `<td><select data-key="${c.key}">${c.options.map(([val, label]) => `<option value="${esc(val)}"${String(val) === String(v) ? ' selected' : ''}>${esc(label)}</option>`).join('')}</select></td>`;
+    return `<td><input data-key="${c.key}"${c.type === 'number' ? ' type="number"' : ''} value="${esc(v)}"></td>`;
+  };
+  return `<tr><td class="grid-no"></td>${cols.map(cell).join('')}<td class="grid-x"><button class="icon-btn" type="button" data-grid-del title="ลบแถว" aria-label="ลบแถว">×</button></td></tr>`;
+}
+
+// Wire one grid (after openPopup) · returns rows() = [{ row: n, values }] of the rows with any typed value.
+function gridBind(id) {
+  const box = $(id);
+  const cols = JSON.parse(box.dataset.cols);
+  const body = box.querySelector('tbody');
+  const number = () => [...body.rows].forEach((r, i) => { r.cells[0].textContent = i + 1; });
+  const pick = (c, raw) => {
+    const text = String(raw ?? '').trim();
+    if (c.type !== 'select') return text;
+    const low = text.toLowerCase();
+    const hit = c.options.find(([v, l]) => String(v).toLowerCase() === low || String(l).toLowerCase() === low)
+      || (low && c.options.find(([, l]) => String(l).toLowerCase().includes(low)));
+    return hit ? hit[0] : c.value ?? c.options[0]?.[0];
+  };
+  number();
+  box.querySelector('[data-grid-add]').onclick = () => { body.insertAdjacentHTML('beforeend', gridRowHtml(cols)); number(); };
+  body.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-grid-del]')) return;
+    if (body.rows.length > 1) e.target.closest('tr').remove();
+    else e.target.closest('tr').outerHTML = gridRowHtml(cols);
+    number();
+  });
+  body.addEventListener('paste', (e) => {
+    const start = e.target.closest('[data-key]');
+    const text = e.clipboardData?.getData('text/plain') || '';
+    if (!start || !/[\t\n]/.test(text.replace(/\r?\n$/, ''))) return; // one value: the browser pastes it normally
+    e.preventDefault();
+    const lines = text.replace(/\r/g, '').replace(/\n+$/, '').split('\n').map((l) => l.split('\t'));
+    let r = [...body.rows].indexOf(start.closest('tr'));
+    const c0 = cols.findIndex((c) => c.key === start.dataset.key);
+    for (const line of lines) {
+      while (r >= body.rows.length) body.insertAdjacentHTML('beforeend', gridRowHtml(cols));
+      line.forEach((value, k) => {
+        const c = cols[c0 + k];
+        if (!c) return;
+        const node = body.rows[r].querySelector(`[data-key="${c.key}"]`);
+        node.value = pick(c, value);
+      });
+      r += 1;
+    }
+    number();
+    toast(`วาง ${lines.length} แถว`);
+  });
+  return {
+    rows: () => [...body.rows].map((tr, i) => ({ row: i + 1, tr, values: Object.fromEntries(cols.map((c) => [c.key, tr.querySelector(`[data-key="${c.key}"]`).value.trim()])) }))
+      .filter(({ values }) => cols.some((c) => c.type !== 'select' && values[c.key] !== '' && String(values[c.key]) !== String(c.value ?? ''))),
+    done: (tr) => { tr.remove(); if (!body.rows.length) body.insertAdjacentHTML('beforeend', gridRowHtml(cols)); number(); }
+  };
+}
+
+// Save every filled row one by one; a saved row leaves the grid, the first failing row stops with its row number
+// (fix it and press บันทึก again: only what is left is sent).
+async function gridSave(grid, saveRow) {
+  const list = grid.rows();
+  if (!list.length) throw new Error('ยังไม่มีข้อมูลในตาราง');
+  let saved = 0;
+  for (const { row, tr, values } of list) {
+    try {
+      await saveRow(values);
+    } catch (err) {
+      throw new Error(`${saved ? `บันทึกแล้ว ${saved} แถว · ` : ''}แถว ${row}: ${err.message}`);
+    }
+    grid.done(tr);
+    saved += 1;
+  }
+  return saved;
+}
+
 function options(values, current, labelOf = (value) => value) {
   return values.map((value) => `<option value="${esc(value)}"${String(current) === String(value) ? ' selected' : ''}>${esc(labelOf(value))}</option>`).join('');
 }

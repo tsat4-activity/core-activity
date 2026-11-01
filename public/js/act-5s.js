@@ -300,7 +300,22 @@ async function a5SetAreas(body, activity, admin, rerender) {
     closePopup();
     rerender();
   });
-  $('a5-add').onclick = () => form(null);
+  // Add = Excel-style grid (ผู้ใช้กำหนด 2026-11-01): paste many areas at once · edit stays the one-area form
+  $('a5-add').onclick = () => {
+    openPopup('เพิ่มพื้นที่', gridField('a5-grid', [
+      { key: 'code', label: 'รหัสพื้นที่', width: '110px' },
+      { key: 'areaType', label: 'ประเภท', type: 'select', options: A5_AREA_TYPES.map((t) => [t, t]), value: a5AreaType, width: '130px' },
+      { key: 'name', label: 'ชื่อพื้นที่' },
+      { key: 'section', label: 'Section', width: '180px' },
+      { key: 'status', label: 'สถานะ', type: 'select', options: [['Active', 'Active'], ['Inactive', 'Inactive']], value: 'Active', width: '110px' }
+    ]), async () => {
+      const n = await gridSave(grid, (v) => a5Api(activity, 'areas', { method: 'POST', body: { year: a5Year, ...v } }));
+      toast(`เพิ่ม ${n} พื้นที่`);
+      closePopup();
+      rerender();
+    });
+    const grid = gridBind('a5-grid');
+  };
   $('a5-edit').onclick = () => picked && form(picked);
   $('a5-del').onclick = () => picked && confirmPopup('ลบพื้นที่', `ตรวจ ${esc(picked.code)} ${esc(picked.name)} อีกครั้งก่อนลบ (ถ้ามีผลตรวจแล้วจะเปลี่ยนเป็น Inactive แทน)`, async () => {
     const r = await a5Api(activity, `areas/${picked.id}?year=${a5Year}`, { method: 'DELETE' });
@@ -430,7 +445,29 @@ async function a5SetChecklist(body, activity, admin, rerender) {
     closePopup();
     rerender();
   });
-  $('a5-add').onclick = () => form(null);
+  // Add = Excel-style grid (ผู้ใช้กำหนด 2026-11-01): paste many items at once · edit stays the one-item form
+  $('a5-add').onclick = () => {
+    const next = Math.max(0, ...data.items.map((i) => Number(i.item_no))) + 1;
+    const groups = Array.from({ length: groupCount }, (_, i) => [String(i + 1), a5GroupName(activity, i + 1)]);
+    openPopup(`เพิ่มหัวข้อปี ${a5Year}`, gridField('a5-grid', [
+      { key: 'itemNo', label: 'ข้อที่', type: 'number', width: '80px' },
+      { key: 'sGroup', label: 'หมวด', type: 'select', options: groups, value: '1', width: '170px' },
+      { key: 'title', label: 'หัวข้อตรวจ' },
+      { key: 'scoreMax', label: 'คะแนนเต็ม', type: 'number', value: '5', width: '90px' },
+      { key: 'status', label: 'สถานะ', type: 'select', options: [['Active', 'Active'], ['Inactive', 'Inactive']], value: 'Active', width: '110px' }
+    ], 5, `ข้อที่ว่าง = ต่อจากข้อล่าสุด (${next}) · คัดลอกหลายแถวจาก Excel แล้ววาง (Ctrl+V) · แถวว่างไม่บันทึก`), async () => {
+      let auto = next;
+      const n = await gridSave(grid, async (v) => {
+        const itemNo = v.itemNo ? Number(v.itemNo) : auto;
+        await a5Api(activity, 'checklist', { method: 'POST', body: { year: a5Year, itemNo, sGroup: Number(v.sGroup), title: v.title, scoreMax: Number(v.scoreMax || 5), status: v.status } });
+        auto = Math.max(auto, itemNo + 1);
+      });
+      toast(`เพิ่ม ${n} ข้อ`);
+      closePopup();
+      rerender();
+    });
+    const grid = gridBind('a5-grid');
+  };
   $('a5-edit').onclick = () => picked && form(picked);
   $('a5-del').onclick = () => picked && confirmPopup('ลบหัวข้อ', `ตรวจข้อที่ ${picked.item_no} อีกครั้งก่อนลบ (ถ้ามีคะแนนแล้วจะเปลี่ยนเป็น Inactive แทน)`, async () => {
     const r = await a5Api(activity, `checklist/${picked.id}`, { method: 'DELETE' });

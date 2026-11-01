@@ -18,6 +18,8 @@
 
 ## บันทึก (อันใหม่อยู่บนสุด)
 
+- 2026-11-01 · Claude [5S] · Popup เพิ่มแบบตาราง Excel (`gridField` ใน core.js): วางหลายแถวจาก Excel ได้ · ใช้ที่ 5S > Setting > หัวข้อตรวจ (ข้อที่ว่าง = ต่อเลขเอง) และ พื้นที่
+
 - 2026-11-01 · Claude [SMF] · ย้ายภาพรวม 5S · CFO · SMF ไปเป็น **หน้าหลัก** (`VIEWS.main = aplHome` ใน act-planner.js, ลบ renderMain ใน core.js) · SMF Dashboard > ภาพรวม เหลือเฉพาะ 3 โครงการของ SMF
 
 - 2026-11-01 · Claude [SMF] · SMF มีโครงการรายปี (`mt_smf_project`, 2026: Smart OEE · Vision Camera · Work Flow Automation): Setting > โครงการ (เพิ่ม/แก้ไข/ลบ/คัดลอกปี) · ทีมต่อโครงการ (`unit`) · ข้อหลักของแผนเลือกโครงการ (`mt_<act>_task.unit` ทุกกิจกรรม) Gantt จัดกลุ่ม + ตัวกรอง · ภาพรวม/Team แสดงต่อโครงการ · `unitsOf` / `projectsOf` ใน common.js
