@@ -36,6 +36,8 @@ let cfoSetTab = 'team';
 // "EF ที่ใช้คำนวณ" was cut from here (ผู้ใช้สั่ง 2026-11-01); mt_cfo_ef stays for activities and entries.
 const CFO_EF_VIEWS = { energy: 'EF พลังงาน', gwp: 'GWP', chemical: 'GWP สารเคมี', ipcc: 'EF IPCC', fuel: 'คุณสมบัติเชื้อเพลิง', cfp: 'EF CFP' };
 let cfoEfView = 'energy';
+// tables an activity can take its EF from (server REF_PICK)
+const CFO_EF_PICK = ['energy', 'chemical', 'cfp'];
 const CFO_GWP_GASES = [['co2', 'CO₂'], ['ch4_fossil', 'Fossil CH₄'], ['ch4', 'CH₄'], ['n2o', 'N₂O'], ['sf6', 'SF₆'], ['nf3', 'NF₃']];
 // Columns of each reference table as in the sheet: [key, label, unit line, number column]
 const CFO_REF_COLS = {
@@ -768,16 +770,26 @@ function cfoSetActivities(body, m, rerender) {
   onEnter('cfo-f-q', search);
   if (!m.admin) return;
   const form = (a) => {
-    const active = m.ef.filter((e) => e.status === 'Active' || e.id === a?.ef_id);
+    // EF list = the reference tables (Setting > Emission Factor) by table and group; an activity saved earlier keeps its own EF on top
+    const current = m.ef.find((e) => e.id === a?.ef_id);
+    const pickable = (r) => CFO_EF_PICK.includes(r.sheet) && r.unit && r.total != null && r.status === 'Active';
+    const efOptions = (current ? `<optgroup label="EF ที่ใช้อยู่"><option value="ef:${current.id}" selected>${esc(cfoEfLabel(current))}</option></optgroup>` : '')
+      + CFO_EF_PICK.map((sheet) => {
+        const list = m.refs.filter((r) => r.sheet === sheet && pickable(r));
+        return list.length ? `<optgroup label="${esc(CFO_EF_VIEWS[sheet])}">${list.map((r) => `<option value="ref:${r.id}">${esc(`${r.grp ? `${r.grp} · ` : ''}${r.name.replace(/^-\s*/, '')} (${cfoRefNum(r.total)} kgCO₂e/${r.unit})`)}</option>`).join('')}</optgroup>` : '';
+      }).join('');
     openPopup(a ? 'แก้ไขกิจกรรม' : 'เพิ่มกิจกรรม', `
       ${field('หน่วยงาน', `<input id="cfo-a-dept" maxlength="80" list="cfo-depts" value="${esc(a?.department || '')}"><datalist id="cfo-depts">${departments.map((v) => `<option value="${esc(v)}">`).join('')}</datalist>`)}
       ${field('ชื่อกิจกรรม', `<input id="cfo-a-name" maxlength="200" value="${esc(a?.name || '')}">`)}
       ${field('รายละเอียด', `<input id="cfo-a-detail" maxlength="500" value="${esc(a?.detail || '')}">`)}
-      ${field('Emission factor', `<select id="cfo-a-ef">${active.map((e) => `<option value="${e.id}"${e.id === a?.ef_id ? ' selected' : ''}>${esc(cfoEfLabel(e))}</option>`).join('')}</select>`)}
+      ${field('หมวด (Scope)', `<select id="cfo-a-scope">${m.scopes.map((sc) => `<option value="${esc(sc.code)}"${sc.code === current?.scope_code ? ' selected' : ''}>${esc(sc.code)} ${esc(sc.name_th || sc.name)}</option>`).join('')}</select>`)}
+      ${field('Emission factor', `<select id="cfo-a-ef"><option value="">- เลือก EF -</option>${efOptions}</select>`)}
       ${field('GWP', `<select id="cfo-a-gwp">${options(m.gwp.map((g) => g.code), a?.gwp_code || m.gwp[0]?.code)}</select>`)}
       ${field('สูตรปริมาณ', `<select id="cfo-a-calc">${options(['', ...Object.keys(CFO_CALCS)], a?.calc || '', (v) => (v ? CFO_CALCS[v].label : 'กรอกปริมาณเอง'))}</select>`)}
       ${field('สถานะ', `<select id="cfo-a-status">${options(['Active', 'Inactive'], a?.status || 'Active')}</select>`)}`, async () => {
-      const body2 = { department: $('cfo-a-dept').value, name: $('cfo-a-name').value, detail: $('cfo-a-detail').value, ef_id: $('cfo-a-ef').value, gwp_code: $('cfo-a-gwp').value, calc: $('cfo-a-calc').value, status: $('cfo-a-status').value };
+      const [kind, id] = $('cfo-a-ef').value.split(':');
+      const body2 = { department: $('cfo-a-dept').value, name: $('cfo-a-name').value, detail: $('cfo-a-detail').value, gwp_code: $('cfo-a-gwp').value, calc: $('cfo-a-calc').value, status: $('cfo-a-status').value,
+        scope_code: $('cfo-a-scope').value, ...(kind === 'ref' ? { ref_id: id } : { ef_id: id }) };
       await a5Api(CFO, `cfo/activities${a ? `/${a.id}` : ''}`, { method: a ? 'PATCH' : 'POST', body: body2 });
       toast('บันทึกแล้ว');
       closePopup();

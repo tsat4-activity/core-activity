@@ -21,6 +21,7 @@
 - 2026-11-01 · Claude [5S] · CFO Setting > Emission Factor แยก 5 ตาราง: EF ที่ใช้คำนวณ · GWP (เพิ่ม/แก้/ลบ) · EF พลังงาน · GWP สารเคมี · EF IPCC (`mt_cfo_ef_ref` + seed 204 แถวจากแผ่น EF TGO AR5 V2) · ผู้ใช้ต้องรัน db/act/cfo.sql แล้ว db/act/cfo_ef_ref_seed.sql
 - 2026-11-01 · Claude [5S] · เพิ่มตาราง คุณสมบัติเชื้อเพลิง (sheet fuel: Heating value / Density / Conversion Factor 30 แถว) · ตัดหน้า EF ที่ใช้คำนวณออกตามผู้ใช้ · ต้องรัน db/act/cfo.sql + cfo_ef_ref_seed.sql อีกครั้ง
 - 2026-11-01 · Claude [5S] · ตาราง EF ทุกหน้าความกว้างคอลัมน์เท่ากัน (.cfo-efgrid .c-*) · เพิ่มตาราง EF CFP (sheet cfp, ว่าง ผู้ใช้วางจาก Excel) · ต้องรัน db/act/cfo.sql อีกครั้ง (constraint sheet)
+- 2026-11-01 · Claude [5S] · ฟอร์มกิจกรรม CFO เลือกหมวด Scope + EF จากตาราง EF พลังงาน / GWP สารเคมี / EF CFP · server คัดลอกเป็น mt_cfo_ef (code ref:<id>:<scope>) ใช้ซ้ำถ้าค่าเท่าเดิม · ไม่ต้องรัน SQL
 
 - 2026-11-01 · Claude [5S] · ทีม 5ส ตัดคณะกรรมการ 5ส ออก เหลือ 4 ทีม (ต้องเลือกทีม) · ทีมตรวจประเมินไม่มีสมาชิก (ผู้รับผิดชอบพื้นที่ / ผู้ตรวจประเมิน) · สิทธิ์ Setting = ผู้ประสานงานของทีมใดก็ได้ใน 5S · แถวเดิมที่ไม่มีทีมแสดงเป็น ไม่ระบุทีม จนกว่าจะแก้
 
