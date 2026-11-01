@@ -589,7 +589,7 @@ export function mountCfo(app) {
       const s = scope.get(f.scope_code) || {};
       const row = {
         group: f.separate ? 'separate' : `s${s.scope}`, scope: s.scope, scope_code: f.scope_code, scope_name: s.name,
-        department: a.department, activity: upstream ? `${a.name} (การได้มาของเชื้อเพลิง)` : a.name, detail: a.detail, source: f.name, unit: f.unit, qty: r6(qty),
+        department: a.department, activity: upstream ? `${a.name} (การได้มาของ${f.kind === "Electricity" || /kwh/i.test(f.unit || "") ? "ไฟฟ้า" : "เชื้อเพลิง"})` : a.name, detail: a.detail, source: f.name, unit: f.unit, qty: r6(qty),
         ef: { ...efGas, hfc: n(f.hfc), hfc_gwp: n(f.hfc) ? hfcGwp : null, pfc: n(f.pfc), pfc_gwp: n(f.pfc) ? pfcGwp : null, other: n(f.other), other_gwp: n(f.other_gwp) },
         total_ef: septic ? gw.ch4 : n(f.kgco2e), source_type: f.source_type, substitute: f.substitute, reference: f.reference,
         ton, tco2e, total: r6((qty * (septic ? gw.ch4 : n(f.kgco2e))) / 1000)

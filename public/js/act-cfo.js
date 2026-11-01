@@ -822,7 +822,7 @@ function cfoSetActivities(body, m, rerender) {
       ${field('สูตรปริมาณ', '<select id="cfo-a-calc"></select>')}
       ${field('Emission factor', '<select id="cfo-a-ef"></select>')}
       <p class="sum-meta" id="cfo-a-hint"></p>
-      <div id="cfo-a-up">${field('EF การได้มาของเชื้อเพลิง (Scope 3-3)', '<select id="cfo-a-ef3"></select>')}<p class="sum-meta" id="cfo-a-hint3"></p></div>
+      <div id="cfo-a-up">${field('EF การได้มาของเชื้อเพลิง / ไฟฟ้า (Scope 3-3)', '<select id="cfo-a-ef3"></select>')}<p class="sum-meta" id="cfo-a-hint3"></p></div>
       ${field('GWP', `<select id="cfo-a-gwp">${options(m.gwp.map((g) => g.code), a?.gwp_code || m.gwp[0]?.code)}</select>`)}
       ${field('สถานะ', `<select id="cfo-a-status">${options(['Active', 'Inactive'], a?.status || 'Active')}</select>`)}`, async () => {
       const [kind, id] = $('cfo-a-ef').value.split(':');
@@ -869,11 +869,13 @@ function cfoSetActivities(body, m, rerender) {
       $('cfo-a-hint').textContent = `${n} EF ที่ใช้กับ ${CFO_ACT_TYPES[type]} หมวด ${$('cfo-a-scope').value}${CFO_CALCS[calc]?.unit ? ` และสูตร ${CFO_CALCS[calc].short} (หน่วย ${CFO_CALCS[calc].out})` : ''}${n ? '' : ' · ยังไม่มี เพิ่มได้ที่ Setting > Emission Factor'}`;
       fillEf3();
     };
-    // Scope 1 fuel: the same quantity is also counted in 3-3 (การได้มาของเชื้อเพลิง) with an EF of the same unit
+    // Scope 1 fuel and Scope 2 electricity: the same quantity is also counted in 3-3 (การได้มาของเชื้อเพลิง / ไฟฟ้า)
+    // with an EF of the same unit, like the TGO Fr-04.1 sheet (ผู้ใช้กำหนด 2026-11-01)
     const fillEf3 = () => {
       const [kind, id] = $('cfo-a-ef').value.split(':');
       const unit = kind === 'ref' ? m.refs.find((r) => String(r.id) === id)?.unit : kind === 'ef' ? current?.unit : null;
-      const show = $('cfo-a-type').value === '1' && $('cfo-a-calc').value !== 'septic' && ['1-1', '1-2'].includes($('cfo-a-scope').value);
+      const type = $('cfo-a-type').value;
+      const show = (type === '1' && $('cfo-a-calc').value !== 'septic' && ['1-1', '1-2'].includes($('cfo-a-scope').value)) || type === '2';
       $('cfo-a-up').hidden = !show;
       if (!show) return;
       const box = $('cfo-a-ef3');
@@ -882,7 +884,14 @@ function cfoSetActivities(body, m, rerender) {
       const groups = unit ? cfoEfGroups((r) => (r.sheet === 'cfp' || r.sheet === 'energy') && !cfoBio(r) && cfoUnitKey(r.unit) === cfoUnitKey(unit) && r.id !== Number(id)) : '';
       box.innerHTML = `<option value="">- ไม่คิด 3-3 -</option>${own ? `<optgroup label="EF ที่ใช้อยู่"><option value="ef:${own.id}">${esc(cfoEfLabel(own))}</option></optgroup>` : ''}${groups}`;
       if (keep && box.querySelector(`option[value="${keep}"]`)) box.value = keep;
-      $('cfo-a-hint3').textContent = unit ? `ปริมาณเดียวกัน (${unit}) คิดอีกบรรทัดใน 3-3 · EF การได้มาของเชื้อเพลิง เพิ่มที่ Setting > Emission Factor > EF CFP (หน่วย ${unit})` : 'เลือก EF ด้านบนก่อน';
+      else if (kind === 'ref') {
+        // grid mix "(CFO Scope2)" → its "SCOPE 3" row of the same years (e.g. 2022-2024: 0.475 → 0.0812)
+        const main = m.refs.find((r) => String(r.id) === id);
+        const years = /ปี (\d{4}-\d{4})/.exec(main?.name || '')?.[1];
+        const pair = years && m.refs.find((r) => r.sheet === main.sheet && r.grp === main.grp && r.name.includes(years) && /SCOPE 3/i.test(r.name));
+        if (pair && box.querySelector(`option[value="ref:${pair.id}"]`)) box.value = `ref:${pair.id}`;
+      }
+      $('cfo-a-hint3').textContent = unit ? `ปริมาณเดียวกัน (${unit}) คิดอีกบรรทัดใน 3-3 · ${type === '2' ? 'ไฟฟ้า grid mix เลือกแถว SCOPE 3 ของปีเดียวกันให้' : `EF การได้มาของเชื้อเพลิง เพิ่มที่ Setting > Emission Factor > EF CFP (หน่วย ${unit})`}` : 'เลือก EF ด้านบนก่อน';
     };
     fillScope();
     fillCalc();
