@@ -34,7 +34,7 @@ let cfoSetTab = 'team';
 // Setting > Emission Factor (ผู้ใช้กำหนด 2026-11-01): GWP + separate reference tables of the TGO sheet
 // "EF TGO AR5 V2" (mt_cfo_ef_ref, seed db/act/cfo_ef_ref_seed.sql) so each table is easy to read and add to.
 // "EF ที่ใช้คำนวณ" was cut from here (ผู้ใช้สั่ง 2026-11-01); mt_cfo_ef stays for activities and entries.
-const CFO_EF_VIEWS = { energy: 'EF พลังงาน', gwp: 'GWP', chemical: 'GWP สารเคมี', ipcc: 'EF IPCC' };
+const CFO_EF_VIEWS = { energy: 'EF พลังงาน', gwp: 'GWP', chemical: 'GWP สารเคมี', ipcc: 'EF IPCC', fuel: 'คุณสมบัติเชื้อเพลิง' };
 let cfoEfView = 'energy';
 const CFO_GWP_GASES = [['co2', 'CO₂'], ['ch4_fossil', 'Fossil CH₄'], ['ch4', 'CH₄'], ['n2o', 'N₂O'], ['sf6', 'SF₆'], ['nf3', 'NF₃']];
 // Columns of each reference table as in the sheet: [key, label, unit line, number column]
@@ -43,7 +43,9 @@ const CFO_REF_COLS = {
     ['ch4', 'CH₄', '(kgCH₄/unit)', 1], ['n2o', 'N₂O', '(kgN₂O/unit)', 1], ['total', 'Total', '(kgCO₂-eq/unit)', 1], ['reference', 'Emission Reference'], ['remark', 'หมายเหตุ']] },
   chemical: { title: 'Global warming potential ของสารเคมี / สารทำความเย็น', cols: [['name', 'Common chemical name'], ['formula', 'สูตร / ชื่ออื่น'], ['unit', 'Units'], ['total', 'GWP Total', '(kgCO₂-eq/unit)', 1], ['reference', 'Reference']] },
   ipcc: { title: 'GHG Emission Factors from IPCC Guidelines', cols: [['name', 'Emission Source'], ['co2', 'CO₂', '(kgCO₂/TJ)', 1], ['ch4_fossil', 'Fossil CH₄', '(kgCH₄/TJ)', 1], ['ch4', 'CH₄', '(kgCH₄/TJ)', 1],
-    ['n2o', 'N₂O', '(kgN₂O/TJ)', 1], ['total', 'Total', '(kgCO₂-eq/TJ)', 1], ['reference', 'Emission Reference']] }
+    ['n2o', 'N₂O', '(kgN₂O/TJ)', 1], ['total', 'Total', '(kgCO₂-eq/TJ)', 1], ['reference', 'Emission Reference']] },
+  // grp = Heating value / Density / Conversion Factor: the band row names what the value is
+  fuel: { title: 'Defaults for Fuel Heating Value (LHV, NCV) & Other Properties', cols: [['name', 'Fuel'], ['total', 'ค่า', '(Heating value / Density / Factor)', 1], ['unit', 'Unit'], ['reference', 'Reference']] }
 };
 const cfoFilter = { scope: '', department: '', q: '', status: '' };
 // page: Summary หน้า 1 (monthly accumulation) / หน้า 2 (summary by Scope), picked in the dropdown before the year
@@ -904,7 +906,7 @@ function cfoSetRef(body, m, rerender, sheet) {
       ${m.admin ? `<div class="action-bar">${button('cfo-add', 'เพิ่ม', 'primary')}${button('cfo-edit', 'แก้ไข', 'secondary', 'disabled')}${button('cfo-del', 'ลบ', 'danger', 'disabled')}</div>` : ''}
     </div>
     <div class="table-wrap sheet" id="cfo-rows"></div>
-    <p class="sum-meta">${esc(spec.title)} · ${rows.length} รายการ · ตารางอ้างอิงตามแผ่น EF TGO AR5 V2 ไว้ดูค่าและที่มา (กิจกรรมใช้ค่าจาก "EF ที่ใช้คำนวณ") · Total ว่าง = คิดจาก GWP ${esc(gwp.code || '')} (CO₂ + Fossil CH₄ × ${gwp.ch4_fossil ?? '-'} + CH₄ × ${gwp.ch4 ?? '-'} + N₂O × ${gwp.n2o ?? '-'})</p>`;
+    <p class="sum-meta">${esc(spec.title)} · ${rows.length} รายการ · ตารางอ้างอิงตามแผ่น EF TGO AR5 V2 ไว้ดูค่าและที่มา${spec.cols.some((c) => c[0] === 'co2') ? ` · Total ว่าง = คิดจาก GWP ${esc(gwp.code || '')} (CO₂ + Fossil CH₄ × ${gwp.ch4_fossil ?? '-'} + CH₄ × ${gwp.ch4 ?? '-'} + N₂O × ${gwp.n2o ?? '-'})` : ''}</p>`;
   $('cfo-f-q').value = cfoFilter.q;
   draw();
   a5Lift(body);

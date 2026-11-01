@@ -14,8 +14,8 @@ const EF_NUMBERS = ['kgco2e', 'co2', 'ch4_fossil', 'ch4', 'n2o', 'sf6', 'nf3', '
 const EF_VALUES = [...EF_NUMBERS, 'unit', 'scope_code', 'separate'];
 const EF_SOURCES = ['self', 'supplier', 'th_lci', 'tgo', 'thai_res', 'int_db', 'other'];
 const GWP_GASES = ['co2', 'ch4_fossil', 'ch4', 'n2o', 'sf6', 'nf3'];
-// mt_cfo_ef_ref: energy = EF ต่อหน่วย · chemical = GWP สารเคมี · ipcc = EF ต่อ TJ
-const REF_SHEETS = ['energy', 'chemical', 'ipcc'];
+// mt_cfo_ef_ref: energy = EF ต่อหน่วย · chemical = GWP สารเคมี · ipcc = EF ต่อ TJ · fuel = ค่าความร้อน / ความหนาแน่น / ตัวแปลงหน่วย
+const REF_SHEETS = ['energy', 'chemical', 'ipcc', 'fuel'];
 const REF_NUMBERS = ['co2', 'ch4_fossil', 'ch4', 'n2o', 'total', 'ratio'];
 // TGO Fr-03.2 criteria as % scores (e.g. 5.00), like the user's sheet: significant = has a source and scores on at least one.
 export const S3_CRITERIA = ['magnitude', 'influence', 'risk', 'sector', 'outsourcing', 'engagement'];

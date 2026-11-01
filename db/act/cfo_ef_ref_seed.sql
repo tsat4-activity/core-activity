@@ -226,3 +226,39 @@ select v.sheet::text, v.grp::text, v.name::text, v.formula::text, v.unit::text, 
   ('ipcc', 'Mobile Source', 'Biogasoline (Ethanol)', null, 'TJ', 70800, null, 180, 0.4, 75946, null, 'For CO2: IPCC defaults (2006), volume 2, chapter 2, p.2.18 - 2.19, For CH4 and N2O: assumed equal to Gasoline combustion (off-road)', null, 47)
 ) as v (sheet, grp, name, formula, unit, co2, ch4_fossil, ch4, n2o, total, ratio, reference, remark, sort_no)
 where not exists (select 1 from public.mt_cfo_ef_ref where sheet = 'ipcc');
+
+-- fuel: 30 แถว
+insert into public.mt_cfo_ef_ref (sheet, grp, name, formula, unit, co2, ch4_fossil, ch4, n2o, total, ratio, reference, remark, sort_no)
+select v.sheet::text, v.grp::text, v.name::text, v.formula::text, v.unit::text, v.co2::numeric, v.ch4_fossil::numeric, v.ch4::numeric, v.n2o::numeric, v.total::numeric, v.ratio::numeric, v.reference::text, v.remark::text, v.sort_no::integer from (values
+  ('fuel', 'Heating value', 'Natural Gas', null, 'MJ/scf', null, null, null, null, 1.02, null, 'สำนักงานนโยบายและแผนพลังงาน, กระทรวงพลังงาน, "รายงานสถิติพลังงานของประเทศไทย 2567 (Energy Statistics of Thailand 2024)', null, 1),
+  ('fuel', 'Heating value', 'LPG', null, 'MJ/kg', null, null, null, null, 49.2962962963, null, 'สำนักงานนโยบายและแผนพลังงาน, กระทรวงพลังงาน, "รายงานสถิติพลังงานของประเทศไทย 2567 (Energy Statistics of Thailand 2024)', null, 2),
+  ('fuel', 'Heating value', 'Lignite', null, 'MJ/kg', null, null, null, null, 11.9, null, 'Defaults, 2006 IPCC Guidelines, volume 2, chapter 1, p.1.18 - 1.19', null, 3),
+  ('fuel', 'Heating value', 'Antracite', null, 'MJ/kg', null, null, null, null, 31.4, null, 'สำนักงานนโยบายและแผนพลังงาน, กระทรวงพลังงาน, "รายงานสถิติพลังงานของประเทศไทย 2567 (Energy Statistics of Thailand 2024)', null, 4),
+  ('fuel', 'Heating value', 'Bituminous coal', null, 'MJ/kg', null, null, null, null, 26.37, null, 'สำนักงานนโยบายและแผนพลังงาน, กระทรวงพลังงาน, "รายงานสถิติพลังงานของประเทศไทย 2567 (Energy Statistics of Thailand 2024)', null, 5),
+  ('fuel', 'Heating value', 'Coking Coal', null, 'MJ/kg', null, null, null, null, 27.63, null, 'สำนักงานนโยบายและแผนพลังงาน, กระทรวงพลังงาน, "รายงานสถิติพลังงานของประเทศไทย 2567 (Energy Statistics of Thailand 2024)', null, 6),
+  ('fuel', 'Heating value', 'Fuel oil A', null, 'MJ/litre', null, null, null, null, 41.4689721495, null, 'PTT', null, 7),
+  ('fuel', 'Heating value', 'Fuel oil C', null, 'MJ/litre', null, null, null, null, 41.8002597021, null, 'PTT', null, 8),
+  ('fuel', 'Heating value', 'Jet Kerosene', null, 'MJ/litre', null, null, null, null, 34.53, null, 'สำนักงานนโยบายและแผนพลังงาน, กระทรวงพลังงาน, "รายงานสถิติพลังงานของประเทศไทย 2567 (Energy Statistics of Thailand 2024)', null, 9),
+  ('fuel', 'Heating value', 'Kerosene', null, 'MJ/litre', null, null, null, null, 34.53, null, 'สำนักงานนโยบายและแผนพลังงาน, กระทรวงพลังงาน, "รายงานสถิติพลังงานของประเทศไทย 2567 (Energy Statistics of Thailand 2024)', null, 10),
+  ('fuel', 'Heating value', 'Diesel', null, 'MJ/litre', null, null, null, null, 36.42, null, 'สำนักงานนโยบายและแผนพลังงาน, กระทรวงพลังงาน, "รายงานสถิติพลังงานของประเทศไทย 2567 (Energy Statistics of Thailand 2024)', null, 11),
+  ('fuel', 'Heating value', 'Gasoline', null, 'MJ/litre', null, null, null, null, 31.48, null, 'สำนักงานนโยบายและแผนพลังงาน, กระทรวงพลังงาน, "รายงานสถิติพลังงานของประเทศไทย 2567 (Energy Statistics of Thailand 2024)', null, 12),
+  ('fuel', 'Heating value', 'Fuel wood', null, 'MJ/kg', null, null, null, null, 15.99, null, 'สำนักงานนโยบายและแผนพลังงาน, กระทรวงพลังงาน, "รายงานสถิติพลังงานของประเทศไทย 2567 (Energy Statistics of Thailand 2024)', null, 13),
+  ('fuel', 'Heating value', 'Saw dust', null, 'MJ/kg', null, null, null, null, 10.88, null, 'สำนักงานนโยบายและแผนพลังงาน, กระทรวงพลังงาน, "รายงานสถิติพลังงานของประเทศไทย 2567 (Energy Statistics of Thailand 2024)', null, 14),
+  ('fuel', 'Heating value', 'Charcoal', null, 'MJ/kg', null, null, null, null, 28.88, null, 'สำนักงานนโยบายและแผนพลังงาน, กระทรวงพลังงาน, "รายงานสถิติพลังงานของประเทศไทย 2567 (Energy Statistics of Thailand 2024)', null, 15),
+  ('fuel', 'Heating value', 'Paddy husk', null, 'MJ/kg', null, null, null, null, 14.4, null, 'สำนักงานนโยบายและแผนพลังงาน, กระทรวงพลังงาน, "รายงานสถิติพลังงานของประเทศไทย 2567 (Energy Statistics of Thailand 2024)', null, 16),
+  ('fuel', 'Heating value', 'Bagasse', null, 'MJ/kg', null, null, null, null, 7.53, null, 'สำนักงานนโยบายและแผนพลังงาน, กระทรวงพลังงาน, "รายงานสถิติพลังงานของประเทศไทย 2567 (Energy Statistics of Thailand 2024)', null, 17),
+  ('fuel', 'Heating value', 'Palm kernel shell', null, 'MJ/kg', null, null, null, null, 18.53, null, 'สำนักงานนโยบายและแผนพลังงาน, กระทรวงพลังงาน, "รายงานสถิติพลังงานของประเทศไทย 2567 (Energy Statistics of Thailand 2024)', null, 18),
+  ('fuel', 'Heating value', 'Cob', null, 'MJ/kg', null, null, null, null, 16.78, null, 'สำนักงานนโยบายและแผนพลังงาน, กระทรวงพลังงาน, "รายงานสถิติพลังงานของประเทศไทย 2567 (Energy Statistics of Thailand 2024)', null, 19),
+  ('fuel', 'Heating value', 'Biogas', null, 'MJ/m3', null, null, null, null, 20.93, null, 'สำนักงานนโยบายและแผนพลังงาน, กระทรวงพลังงาน, "รายงานสถิติพลังงานของประเทศไทย 2567 (Energy Statistics of Thailand 2024)', null, 20),
+  ('fuel', 'Heating value', 'CNG', null, 'MJ/kg', null, null, null, null, 37.9, null, 'PTT', null, 21),
+  ('fuel', 'Heating value', 'Lignite', null, 'MJ/kg', null, null, null, null, 11.9, null, 'Defaults, 2006 IPCC Guidelines, volume 2, chapter 1, p.1.18 - 1.19', null, 22),
+  ('fuel', 'Heating value', 'Biodiesel', null, 'MJ/kg', null, null, null, null, 27, null, 'Defaults, 2006 IPCC Guidelines, volume 2, chapter 1, p.1.18 - 1.19', null, 23),
+  ('fuel', 'Heating value', 'Ethanol (Biogasoline)', null, 'MJ/kg', null, null, null, null, 27, null, 'Defaults, 2006 IPCC Guidelines, volume 2, chapter 1, p.1.18 - 1.19', null, 24),
+  ('fuel', 'Density', 'LPG', null, 'kg/litre', null, null, null, null, 0.54, null, 'สำนักงานนโยบายและแผนพลังงาน, กระทรวงพลังงาน, "รายงานสถิติพลังงานของประเทศไทย 2567 (Energy Statistics of Thailand 2024)', null, 25),
+  ('fuel', 'Density', 'Diesel', null, 'kg/litre', null, null, null, null, 0.87, null, 'ประกาศกรมธุรกิจพลังงาน, กำหนดคุณลักษณะและคุณภาพของน้ำมันดีเซล', null, 26),
+  ('fuel', 'Density', 'Biodiesel', null, 'kg/litre', null, null, null, null, 0.86, null, 'ประกาศกรมธุรกิจพลังงาน, กำหนดคุณลักษณะและคุณภาพของไบโอดีเซลประเภทเมทิลเอสเตอร์ของกรดไขมัน', null, 27),
+  ('fuel', 'Density', 'Gasoline', null, 'kg/litre', null, null, null, null, 0.7347, null, 'Specification of gasoline, IRPC', null, 28),
+  ('fuel', 'Density', 'Ethanol', null, 'kg/litre', null, null, null, null, 0.783, null, 'Thermodyamics Tables', null, 29),
+  ('fuel', 'Conversion Factor', 'MMBTU to MJ', null, 'MJ/MMBTU', null, null, null, null, 1055.055853, null, 'สำนักงานนโยบายและแผนพลังงาน, กระทรวงพลังงาน, "รายงานสถิติพลังงานของประเทศไทย 2567 (Energy Statistics of Thailand 2024)', null, 30)
+) as v (sheet, grp, name, formula, unit, co2, ch4_fossil, ch4, n2o, total, ratio, reference, remark, sort_no)
+where not exists (select 1 from public.mt_cfo_ef_ref where sheet = 'fuel');

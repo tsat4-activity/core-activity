@@ -3,7 +3,8 @@
     python -I scripts/cfo_ef_ref_excel.py "C:/Work/projects/Store/inbox/Verify sheet TGO.xlsx"
 
 Sheet "EF TGO AR5 V2": GWP (row 8), EF for energy consumption per unit (rows 15-159), common chemical GWP
-(rows 164-175) and EF from IPCC Guidelines per TJ (rows 188-234). The seed fills a table only while it is empty,
+(rows 164-175), EF from IPCC Guidelines per TJ (rows 188-234) and fuel properties: heating value, density and
+conversion factors (rows 237-269). The seed fills a table only while it is empty,
 so rows edited in Setting > Emission Factor are never overwritten. spec: docs/specs/act-cfo.md
 """
 import sys
@@ -13,7 +14,9 @@ from pathlib import Path
 import openpyxl
 
 ROOT = Path(__file__).resolve().parent.parent
-SHEETS = [('energy', 15, 159), ('chemical', 164, 175), ('ipcc', 188, 234)]
+SHEETS = [('energy', 15, 159), ('chemical', 164, 175), ('ipcc', 188, 234), ('fuel', 237, 269)]
+# fuel: a header row (Unit in column E) starts each part; its column D names the value
+FUEL_PARTS = {'Heating value': 'Heating value', 'Density': 'Density', 'Factor': 'Conversion Factor'}
 NUMERIC = {c: 'numeric' for c in ('co2', 'ch4_fossil', 'ch4', 'n2o', 'total', 'ratio')} | {'sort_no': 'integer'}
 
 
@@ -41,7 +44,7 @@ def lit(v):
 def main(book_path):
     warnings.simplefilter('ignore')
     ws = openpyxl.load_workbook(book_path, read_only=True, data_only=True)['EF TGO AR5 V2']
-    rows = {i: r for i, r in enumerate(ws.iter_rows(min_row=1, max_row=240, values_only=True), start=1)}
+    rows = {i: r for i, r in enumerate(ws.iter_rows(min_row=1, max_row=275, values_only=True), start=1)}
     g = rows[8]
     out = ['-- CFO: ตารางอ้างอิง Emission Factor (แผ่น EF TGO AR5 V2) · สร้างจาก scripts/cfo_ef_ref_excel.py ห้ามแก้มือ',
            '-- รันใน Tx Data หลัง db/act/cfo.sql · รันซ้ำได้: เติมเฉพาะตารางที่ยังว่าง ไม่ทับค่าที่แก้ใน Setting', '',
@@ -53,6 +56,12 @@ def main(book_path):
         values, grp = [], None
         for i in range(first, last + 1):
             r = rows[i]
+            if sheet == 'fuel':
+                if txt(r[4]) == 'Unit':
+                    grp = FUEL_PARTS.get(txt(r[3]), txt(r[3]))
+                elif num(r[3]) is not None:
+                    values.append([sheet, grp, txt(r[1]).rstrip(':').strip(), None, txt(r[4]), None, None, None, None, num(r[3]), None, txt(r[5]), None, len(values) + 1])
+                continue
             name = txt(r[2])
             if not name:
                 continue
