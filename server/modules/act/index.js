@@ -6,6 +6,7 @@ import { mountAudit } from './audit.js';
 import { mountTransaction } from './transaction.js';
 import { PLANNER_ON, mountPlanner, plannerEvents } from './planner.js';
 import { CFO_ON, mountCfo } from './cfo.js';
+import { mountOverview } from './overview.js';
 
 // Activities 5S and CFO: calendar here, Project Planner in planner.js, checklist audit Dashboard/Setting in audit.js,
 // audits and Issues in transaction.js, CFO in cfo.js. Each activity has its own tables (db/act/<activity>.sql, scripts/act-sql.js).
@@ -51,6 +52,7 @@ export default defineModule({
       res.json({ events: events.sort((a, b) => a.start_date.localeCompare(b.start_date)) });
     }));
 
+    mountOverview(app); // SMF Dashboard > ภาพรวม of every project
     mountPlanner(app);
     mountAudit(app);
     mountTransaction(app);

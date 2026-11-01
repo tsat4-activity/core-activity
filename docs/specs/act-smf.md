@@ -33,3 +33,7 @@
 - `server/modules/act/audit.js` `ROLES` + `server/modules/act/common.js` `accessOf` (สิทธิ์ของ advisor / smart)
 - `public/js/act-planner.js` ป้ายบทบาทของ SMF (`APL_ROLE_LABEL` แยกตามกิจกรรม) + หน้า Dashboard > Team
 - `public/js/units.js` ชื่อ SMF แสดง "SMF · Smart Factory"
+
+## Dashboard > ภาพรวม (ผู้ใช้กำหนด 2026-11-01)
+
+SMF (Smart Factory) ดูแลโครงการหลัก 5S · CFO · SMF: แท็บแรกของ SMF Dashboard แสดง KPI รวม (ความคืบหน้าแผนเฉลี่ย · แผนเลยกำหนด · Issue 5ส ที่ยังเปิด · คนในทีม) และการ์ดต่อโครงการ: ความคืบหน้าแผนงาน · ผลลัพธ์หลัก · ทีม · ปัญหา / เลยกำหนด พร้อมปุ่มเปิด Dashboard ของโครงการนั้น · API `GET /api/act/overview?year=` (`server/modules/act/overview.js`)

@@ -404,6 +404,8 @@ function aplOpenForm(activity, tasks, task, parentId, rerender) {
 }
 
 const APL_DASH_TABS = { schedule: 'Schedule', team: 'Team' };
+// SMF (Smart Factory) oversees the main projects: its Dashboard opens on ภาพรวม of 5S, CFO and SMF (ผู้ใช้กำหนด 2026-11-01).
+const APL_DASH_TABS_OF = { smf: { overview: 'ภาพรวม', ...APL_DASH_TABS } };
 const APL_SET_TABS = { team: 'ทีม', plan: 'แผนงาน' };
 const APL_ROLE_LABEL = { ...ACT_TEAM_ROLES, auditor: 'ผู้ตรวจประเมิน' };
 // Team per activity (ผู้ใช้กำหนด 2026-10-29, docs/specs/act-teams.md); others use APL_ROLE_LABEL.
@@ -415,9 +417,10 @@ const aplSetTab = {};
 
 async function aplDashboard(target, activity) {
   const me = await a5Api(activity, `me?year=${a5Year}`);
-  const tab = aplDashTab[activity] || 'schedule';
+  const tabs = APL_DASH_TABS_OF[activity] || APL_DASH_TABS;
+  const tab = tabs[aplDashTab[activity]] ? aplDashTab[activity] : Object.keys(tabs)[0];
   target.innerHTML = `<div class="view-body"><section class="card">
-    ${pageBar(a5Seg('data-apldash', APL_DASH_TABS, tab), `<div class="a5-year">${a5YearSelect(me.years)}</div>`, 'a5')}
+    ${pageBar(a5Seg('data-apldash', tabs, tab), `<div class="a5-year">${a5YearSelect(me.years)}</div>`, 'a5')}
     <div id="a5-body"><div class="empty">กำลังโหลด...</div></div>
   </section></div>`;
   const rerender = () => aplDashboard(target, activity).catch(onErr);
@@ -426,8 +429,70 @@ async function aplDashboard(target, activity) {
   });
   if ($('a5-year')) $('a5-year').onchange = () => { a5Year = Number($('a5-year').value); rerender(); };
   const body = $('a5-body');
+  if (tab === 'overview') return aplDrawOverview(body);
   if (tab === 'team') return aplDrawTeam(body, activity, me.access.admin);
   return aplRender(body, activity, { inPage: true, readOnly: true });
+}
+
+// ภาพรวม (server: server/modules/act/overview.js): KPIs of all projects, then one card per project with
+// plan progress · key results · team · open problems, and a link to that project's Dashboard.
+const OV_PLAN = [['early', 'เสร็จก่อนแผน'], ['done', 'เสร็จ'], ['ahead', 'เร็วกว่าแผน'], ['ontrack', 'ตามแผน'], ['behind', 'ช้ากว่าแผน'], ['late', 'เสร็จช้า'], ['overdue', 'เลยกำหนด'], ['waiting', 'ยังไม่ถึง']];
+const OV_UNIT_LABEL = { '5s': { standard: 'ทีมมาตรฐาน', academic: 'ทีมวิชาการ', pr: 'ทีมประชาสัมพันธ์', audit: 'ทีมตรวจประเมิน' } };
+const ovNum = (n, d = 0) => Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: d, minimumFractionDigits: d });
+
+async function aplDrawOverview(body) {
+  const data = await api(`/api/act/overview?year=${a5Year}`);
+  const ps = data.projects;
+  const plans = ps.filter((p) => p.plan?.items);
+  const sumOf = (fn) => ps.reduce((s, p) => s + (fn(p) || 0), 0);
+  const kpis = [
+    chartKpi({ label: 'ความคืบหน้าแผนรวม', value: plans.length ? Math.round(plans.reduce((s, p) => s + p.plan.percent, 0) / plans.length) : 0, unit: '%', pie: plans.length ? plans.reduce((s, p) => s + p.plan.percent, 0) / plans.length : 0, note: `${plans.length} โครงการที่มีแผนงาน`, color: CHART.series[0] }),
+    chartKpi({ label: 'รายการแผนเลยกำหนด', value: ovNum(sumOf((p) => p.plan?.overdue)), unit: 'รายการ', icon: 'event_busy', note: 'ทุกโครงการ', color: CHART.series[2] }),
+    chartKpi({ label: 'Issue 5ส ที่ยังเปิด', value: ovNum(sumOf((p) => p.results?.openIssues)), unit: 'รายการ', icon: 'report', note: `เลยกำหนด ${ovNum(sumOf((p) => p.results?.overdueIssues))}`, color: CHART.series[1] }),
+    chartKpi({ label: 'คนในทีมทุกโครงการ', value: ovNum(sumOf((p) => p.team?.people)), unit: 'คน', icon: 'groups', note: `ปี ${data.year} · คนเดียวอยู่หลายโครงการนับแยก`, color: CHART.series[3] })
+  ].join('');
+  const row = (label, value) => `<div class="ov-row"><span>${label}</span><b>${value}</b></div>`;
+  const section = (title, html) => `<div class="ov-sec"><div class="ov-sec-title">${title}</div>${html}</div>`;
+  const planHtml = (p) => {
+    if (!p.plan) return '<p class="sum-meta">ไม่มีแผนงาน (Project Planner)</p>';
+    if (!p.plan.items) return '<p class="sum-meta">ยังไม่มีรายการแผนปีนี้</p>';
+    const chips = OV_PLAN.filter(([code]) => p.plan.counts[code]).map(([code, label]) => `<span class="ov-chip is-${code}">${label} ${p.plan.counts[code]}</span>`).join('');
+    return `<div class="ov-progress"><div class="ov-bar"><span style="width:${p.plan.percent}%"></span></div><b>${p.plan.percent}%</b></div>
+      <div class="ov-chips">${chips}</div><p class="sum-meta">${p.plan.items} หัวข้อหลัก</p>`;
+  };
+  const resultHtml = (p) => {
+    const r = p.results;
+    if (p.activity === '5s' && r) return row('คะแนนเฉลี่ยทั้งปี', `${ovNum(r.score, 1)}%`) + row('ใบตรวจปีนี้', `${ovNum(r.audits)} (Self ${ovNum(r.self)} · Committee ${ovNum(r.committee)})`)
+      + row(`${ACT_MONTHS[r.month - 1]}`, `ตรวจแล้ว ${ovNum(r.monthAudits)} ใบ`) + row('Self Audit ค้างเดือนนี้', `${ovNum(r.selfDue)} / ${ovNum(r.areas)} พื้นที่`);
+    if (p.activity === 'cfo' && r) {
+      const pill = r.compareSame ? chartPill(r.total, r.compareSame, ` จากปี ${r.compareYear}`) : '';
+      return row('tCO₂e ปีนี้', `${ovNum(r.total, 3)}`) + row('บันทึกแล้ว', `${r.months} เดือน`)
+        + row(`ปี ${r.compareYear} เดือนเดียวกัน`, r.compareSame ? ovNum(r.compareSame, 3) : '-') + row(`เป้า (ลด ${r.target}%)`, r.compareSame ? ovNum(r.targetSame, 3) : '-') + (pill ? `<div class="ov-pill">${pill}</div>` : '');
+    }
+    if (p.plan?.items) return row('หัวข้อแผนงาน', ovNum(p.plan.items)) + row('ความคืบหน้า', `${p.plan.percent}%`);
+    return '<p class="sum-meta">ยังไม่มีข้อมูล</p>';
+  };
+  const teamHtml = (p) => {
+    if (!p.team) return '<p class="sum-meta">ยังไม่ได้สร้างตารางทีม</p>';
+    const labels = OV_UNIT_LABEL[p.activity] || {};
+    const units = Object.entries(p.team.units).map(([u, n]) => row(labels[u] || u, `${n} คน`)).join('');
+    const memberLabel = p.activity === '5s' ? 'สมาชิก' : 'ตัวแทนหน่วยงาน';
+    return row('ทั้งหมด', `${ovNum(p.team.people)} คน`) + row('คณะกรรมการ', `${ovNum(p.team.committee)} คน`)
+      + (p.team.smart ? row('Smart Team', `${p.team.smart} คน`) : '') + (p.team.members ? row(memberLabel, `${p.team.members} คน`) : '') + units;
+  };
+  const problemHtml = (p) => {
+    const r = p.results;
+    const list = p.plan?.late?.length ? `<ul class="ov-late">${p.plan.late.map((t) => `<li><span>${esc(actNoLead(t.title))}</span><b>${actShort(t.end)} · ${t.progress}%</b></li>`).join('')}</ul>` : '';
+    return (p.activity === '5s' && r ? row('Issue ที่ยังเปิด', ovNum(r.openIssues)) + row('Issue เลยกำหนด', `<span class="${r.overdueIssues ? 'ov-bad' : ''}">${ovNum(r.overdueIssues)}</span>`) : '')
+      + (p.plan ? row('แผนเลยกำหนด', `<span class="${p.plan.overdue ? 'ov-bad' : ''}">${ovNum(p.plan.overdue)}</span>`) : '') + list || '<p class="sum-meta">ไม่มี</p>';
+  };
+  const cards = ps.map((p) => `<article class="card ov-card" style="--ov:${actColor(p.activity)}">
+      <div class="ov-head"><strong>${esc(actLabel(p.activity))}</strong><span class="sum-meta">${p.activity === 'smf' ? 'Smart Factory' : p.activity === 'cfo' ? 'Carbon Footprint for Organization' : '5ส'}</span>${button('', 'เปิด Dashboard', 'secondary', `data-ov-go="${p.activity}-home"`)}</div>
+      ${section('ความคืบหน้าแผนงาน', planHtml(p))}${section('ผลลัพธ์หลัก', resultHtml(p))}${section('ทีม', teamHtml(p))}${section('ปัญหา / เลยกำหนด', problemHtml(p))}
+    </article>`).join('');
+  body.innerHTML = `<div class="ch-kpis">${kpis}</div><div class="ov-grid">${cards}</div><p class="sum-meta">ข้อมูล ณ ${actShort(data.today)} ${data.year}</p>`;
+  body.querySelectorAll('[data-ov-go]').forEach((node) => { node.onclick = () => openView(node.dataset.ovGo); });
+  a5Lift(body);
 }
 
 async function aplDrawTeam(body, activity, admin) {
