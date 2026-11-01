@@ -22,8 +22,8 @@ const CFO_S3_CRITERIA = [
 const CFO_CALCS = {
   septic: { label: 'บ่อเกรอะ (คน × วัน → kg CH₄)', short: 'บ่อเกรอะ', out: 'kg CH₄', fields: [['people', 'จำนวนคน', 1], ['days', 'จำนวนวันทำงาน', 1]],
     qty: (i, s) => i.people * i.days * Number(s.septic_bod || 0) * 0.001 * Number(s.septic_i || 0) * Number(s.septic_b0 || 0) * Number(s.septic_mcf || 0) },
-  tkm: { label: 'ขนส่ง (ตัน × กม. → tkm)', short: 'ตัน × กม.', out: 'tkm', fields: [['tons', 'น้ำหนักที่ขนส่ง (ตัน)', 'any'], ['km', 'ระยะทาง (กม.)', 'any']], qty: (i) => i.tons * i.km },
-  km_fuel: { label: 'ระยะทาง ÷ อัตราสิ้นเปลือง → ลิตร', short: 'กม. ÷ กม./ลิตร', out: 'ลิตร', fields: [['km', 'ระยะทาง (กม.)', 'any'], ['km_per_l', 'อัตราสิ้นเปลือง (กม./ลิตร)', 'any']], qty: (i) => (i.km_per_l ? i.km / i.km_per_l : 0) }
+  tkm: { label: 'ขนส่ง (ตัน × กม. → tkm)', short: 'ตัน × กม.', out: 'tkm', unit: /t\.?km/i, fields: [['tons', 'น้ำหนักที่ขนส่ง (ตัน)', 'any'], ['km', 'ระยะทาง (กม.)', 'any']], qty: (i) => i.tons * i.km },
+  km_fuel: { label: 'ระยะทาง ÷ อัตราสิ้นเปลือง → ลิตร', short: 'กม. ÷ กม./ลิตร', out: 'ลิตร', unit: /^(l|liter|litre|ลิตร)$/i, fields: [['km', 'ระยะทาง (กม.)', 'any'], ['km_per_l', 'อัตราสิ้นเปลือง (กม./ลิตร)', 'any']], qty: (i) => (i.km_per_l ? i.km / i.km_per_l : 0) }
 };
 const CFO_SOURCE_TYPES = [['self', 'Self collect (1st)'], ['supplier', 'Supplier (1st)'], ['th_lci', 'TH LCI DB (2nd)'], ['tgo', 'TGO EF (2nd)'], ['thai_res', 'Thai Res. (2nd)'], ['int_db', 'Int. DB (2nd)'], ['other', 'Other']];
 const CFO_COMPANY = [['company_name', 'ชื่อธุรกิจ'], ['company_address', 'สถานที่ตั้ง'], ['company_area', 'พื้นที่โรงงาน'], ['company_business', 'ประเภทธุรกิจ'],
@@ -38,6 +38,16 @@ const CFO_EF_VIEWS = { energy: 'EF พลังงาน', gwp: 'GWP', chemical:
 let cfoEfView = 'energy';
 // tables an activity can take its EF from (server REF_PICK)
 const CFO_EF_PICK = ['energy', 'chemical', 'cfp'];
+// activity form: Scope picks the categories and the EF that fit it (sep = การปล่อย GHG โดยตรงที่ทำการรายงานแยก)
+const CFO_ACT_TYPES = { 1: 'Scope 1', 2: 'Scope 2', 3: 'Scope 3', sep: 'การปล่อย GHG โดยตรงที่ทำการรายงานแยก' };
+const cfoBio = (r) => /biogenic/i.test(r.name);
+const cfoNonKyoto = (r) => r.sheet === 'chemical' && /HCFC|R-22\b/i.test(r.name);
+const CFO_EF_FOR = {
+  1: (r) => (r.sheet === 'energy' && r.grp !== 'Electricity' && !cfoBio(r)) || (r.sheet === 'chemical' && !cfoNonKyoto(r)),
+  2: (r) => r.sheet === 'energy' && r.grp === 'Electricity',
+  3: (r) => r.sheet === 'cfp' || (r.sheet === 'energy' && !cfoBio(r)),
+  sep: (r) => cfoBio(r) || cfoNonKyoto(r)
+};
 const CFO_GWP_GASES = [['co2', 'CO₂'], ['ch4_fossil', 'Fossil CH₄'], ['ch4', 'CH₄'], ['n2o', 'N₂O'], ['sf6', 'SF₆'], ['nf3', 'NF₃']];
 // Columns of each reference table as in the sheet: [key, label, unit line, number column]
 const CFO_REF_COLS = {
@@ -770,31 +780,69 @@ function cfoSetActivities(body, m, rerender) {
   onEnter('cfo-f-q', search);
   if (!m.admin) return;
   const form = (a) => {
-    // EF list = the reference tables (Setting > Emission Factor) by table and group; an activity saved earlier keeps its own EF on top
+    // Scope → หมวด → Emission factor → สูตร (ผู้ใช้กำหนด 2026-11-01): each list follows the one before it.
+    // EF comes from Setting > Emission Factor; an activity saved earlier keeps its own EF on top of the list.
     const current = m.ef.find((e) => e.id === a?.ef_id);
-    const pickable = (r) => CFO_EF_PICK.includes(r.sheet) && r.unit && r.total != null && r.status === 'Active';
-    const efOptions = (current ? `<optgroup label="EF ที่ใช้อยู่"><option value="ef:${current.id}" selected>${esc(cfoEfLabel(current))}</option></optgroup>` : '')
-      + CFO_EF_PICK.map((sheet) => {
-        const list = m.refs.filter((r) => r.sheet === sheet && pickable(r));
-        return list.length ? `<optgroup label="${esc(CFO_EF_VIEWS[sheet])}">${list.map((r) => `<option value="ref:${r.id}">${esc(`${r.grp ? `${r.grp} · ` : ''}${r.name.replace(/^-\s*/, '')} (${cfoRefNum(r.total)} kgCO₂e/${r.unit})`)}</option>`).join('')}</optgroup>` : '';
-      }).join('');
+    const type0 = current ? (current.separate ? 'sep' : current.scope_code[0]) : '1';
+    const efName = (r) => `${r.grp ? `${r.grp} · ` : ''}${r.name.replace(/^-\s*/, '')} (${cfoRefNum(r.total)} kgCO₂e/${r.unit})`;
     openPopup(a ? 'แก้ไขกิจกรรม' : 'เพิ่มกิจกรรม', `
       ${field('หน่วยงาน', `<input id="cfo-a-dept" maxlength="80" list="cfo-depts" value="${esc(a?.department || '')}"><datalist id="cfo-depts">${departments.map((v) => `<option value="${esc(v)}">`).join('')}</datalist>`)}
       ${field('ชื่อกิจกรรม', `<input id="cfo-a-name" maxlength="200" value="${esc(a?.name || '')}">`)}
       ${field('รายละเอียด', `<input id="cfo-a-detail" maxlength="500" value="${esc(a?.detail || '')}">`)}
-      ${field('หมวด (Scope)', `<select id="cfo-a-scope">${m.scopes.map((sc) => `<option value="${esc(sc.code)}"${sc.code === current?.scope_code ? ' selected' : ''}>${esc(sc.code)} ${esc(sc.name_th || sc.name)}</option>`).join('')}</select>`)}
-      ${field('Emission factor', `<select id="cfo-a-ef"><option value="">- เลือก EF -</option>${efOptions}</select>`)}
+      ${field('Scope', `<select id="cfo-a-type">${options(Object.keys(CFO_ACT_TYPES), type0, (v) => CFO_ACT_TYPES[v])}</select>`)}
+      ${field('หมวด', '<select id="cfo-a-scope"></select>')}
+      ${field('สูตรปริมาณ', '<select id="cfo-a-calc"></select>')}
+      ${field('Emission factor', '<select id="cfo-a-ef"></select>')}
+      <p class="sum-meta" id="cfo-a-hint"></p>
       ${field('GWP', `<select id="cfo-a-gwp">${options(m.gwp.map((g) => g.code), a?.gwp_code || m.gwp[0]?.code)}</select>`)}
-      ${field('สูตรปริมาณ', `<select id="cfo-a-calc">${options(['', ...Object.keys(CFO_CALCS)], a?.calc || '', (v) => (v ? CFO_CALCS[v].label : 'กรอกปริมาณเอง'))}</select>`)}
       ${field('สถานะ', `<select id="cfo-a-status">${options(['Active', 'Inactive'], a?.status || 'Active')}</select>`)}`, async () => {
       const [kind, id] = $('cfo-a-ef').value.split(':');
       const body2 = { department: $('cfo-a-dept').value, name: $('cfo-a-name').value, detail: $('cfo-a-detail').value, gwp_code: $('cfo-a-gwp').value, calc: $('cfo-a-calc').value, status: $('cfo-a-status').value,
-        scope_code: $('cfo-a-scope').value, ...(kind === 'ref' ? { ref_id: id } : { ef_id: id }) };
+        type: $('cfo-a-type').value, scope_code: $('cfo-a-scope').value, ...(kind === 'ref' ? { ref_id: id } : kind === 'ef' ? { ef_id: id } : {}) };
       await a5Api(CFO, `cfo/activities${a ? `/${a.id}` : ''}`, { method: a ? 'PATCH' : 'POST', body: body2 });
       toast('บันทึกแล้ว');
       closePopup();
       rerender();
     });
+    const fillScope = () => {
+      const type = $('cfo-a-type').value;
+      const list = m.scopes.filter((sc) => String(sc.scope) === (type === 'sep' ? '1' : type));
+      const keep = list.some((sc) => sc.code === $('cfo-a-scope').value) ? $('cfo-a-scope').value : (current && list.some((sc) => sc.code === current.scope_code) ? current.scope_code : list[0]?.code);
+      $('cfo-a-scope').innerHTML = list.map((sc) => `<option value="${esc(sc.code)}"${sc.code === keep ? ' selected' : ''}>${esc(sc.code)} ${esc(sc.name_th || sc.name)}</option>`).join('') || '<option value="">ยังไม่มีหมวด (รัน db/act/cfo.sql)</option>';
+    };
+    const fillCalc = () => {
+      const type = $('cfo-a-type').value;
+      const keys = ['', ...Object.keys(CFO_CALCS).filter((k) => k !== 'septic' || type === '1' || type === 'sep')];
+      const keep = keys.includes($('cfo-a-calc').value) ? $('cfo-a-calc').value : (keys.includes(a?.calc || '') ? a?.calc || '' : '');
+      $('cfo-a-calc').innerHTML = options(keys, keep, (v) => (v ? CFO_CALCS[v].label : 'กรอกปริมาณเอง'));
+    };
+    const fillEf = () => {
+      const type = $('cfo-a-type').value;
+      const calc = $('cfo-a-calc').value;
+      const box = $('cfo-a-ef');
+      box.disabled = calc === 'septic';
+      if (calc === 'septic') {
+        box.innerHTML = '<option value="">บ่อเกรอะ: ใช้ kg CH₄ × GWP CH₄ (ระบบตั้ง EF ให้)</option>';
+        $('cfo-a-hint').textContent = 'บ่อเกรอะ: กรอกจำนวนคนและวันทำงานตอนบันทึก ระบบคิด kg CH₄ จากค่าบ่อเกรอะใน Setting > บริษัท';
+        return;
+      }
+      const unitOk = (unit) => !CFO_CALCS[calc]?.unit || CFO_CALCS[calc].unit.test(unit || '');
+      const groups = CFO_EF_PICK.map((sheet) => {
+        const list = m.refs.filter((r) => r.sheet === sheet && r.unit && r.total != null && r.status === 'Active' && CFO_EF_FOR[type](r) && unitOk(r.unit));
+        return list.length ? `<optgroup label="${esc(CFO_EF_VIEWS[sheet])}">${list.map((r) => `<option value="ref:${r.id}">${esc(efName(r))}</option>`).join('')}</optgroup>` : '';
+      }).join('');
+      const own = current && unitOk(current.unit) ? `<optgroup label="EF ที่ใช้อยู่"><option value="ef:${current.id}" selected>${esc(cfoEfLabel(current))}</option></optgroup>` : '';
+      const keep = box.value;
+      box.innerHTML = `<option value="">- เลือก EF -</option>${own}${groups}`;
+      if (keep && box.querySelector(`option[value="${keep}"]`)) box.value = keep;
+      const n = box.querySelectorAll('option[value^="ref:"]').length;
+      $('cfo-a-hint').textContent = `${n} EF ที่ใช้กับ ${CFO_ACT_TYPES[type]}${CFO_CALCS[calc]?.unit ? ` และสูตร ${CFO_CALCS[calc].short} (หน่วย ${CFO_CALCS[calc].out})` : ''}${n ? '' : ' · ยังไม่มี เพิ่มได้ที่ Setting > Emission Factor'}`;
+    };
+    fillScope();
+    fillCalc();
+    fillEf();
+    $('cfo-a-type').onchange = () => { fillScope(); fillCalc(); fillEf(); };
+    $('cfo-a-calc').onchange = fillEf;
   };
   $('cfo-add').onclick = () => form(null);
   $('cfo-edit').onclick = () => picked && form(picked);

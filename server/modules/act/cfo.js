@@ -379,7 +379,7 @@ export function mountCfo(app) {
   // An activity picks its EF from Setting > Emission Factor (EF พลังงาน / GWP สารเคมี / EF CFP, ผู้ใช้กำหนด 2026-11-01):
   // the reference row is copied into mt_cfo_ef (code ref:<id>:<scope>) because entries keep the EF they were saved with.
   // The copy is reused while the reference values stay the same; after an edit a new copy is made, old entries keep theirs.
-  const efFromRef = async (t, refId, scopeCode) => {
+  const efFromRef = async (t, refId, scopeCode, direct = false) => {
     const ref = must(await tx.from(t.efRef).select('*').eq('id', refId).maybeSingle());
     if (!ref || !REF_PICK.includes(ref.sheet)) return { error: 'ไม่พบ EF ในตารางอ้างอิง' };
     if (!ref.unit || ref.total == null) return { error: 'รายการนี้เป็นหัวข้อ ไม่มีค่า EF ให้เลือกรายการย่อย' };
@@ -387,25 +387,41 @@ export function mountCfo(app) {
     const biogenic = /biogenic/i.test(ref.name);
     const nonKyoto = ref.sheet === 'chemical' && /HCFC|R-22\b/i.test(ref.name);
     const row = { scope_code: scopeCode, kind: ref.grp, name: ref.name.replace(/^-\s*/, ''), detail: ref.formula, unit: ref.unit, reference: ref.reference, year: thisYear(), status: 'Active',
-      source_type: ref.sheet === 'cfp' ? null : 'tgo', separate: biogenic || nonKyoto,
+      source_type: ref.sheet === 'cfp' ? null : 'tgo', separate: direct || biogenic || nonKyoto,
       kgco2e: biogenic || nonKyoto ? 0 : Number(ref.total), co2_bio: biogenic ? Number(ref.total) : null };
     if (ref.sheet === 'energy' && !biogenic) Object.assign(row, { co2: ref.co2, ch4_fossil: ref.ch4_fossil, ch4: ref.ch4, n2o: ref.n2o });
     if (ref.sheet === 'chemical') Object.assign(row, nonKyoto ? { other: 1, other_gwp: Number(ref.total) } : { hfc: 1, hfc_gwp: Number(ref.total) });
-    const base = `ref:${ref.id}:${scopeCode}`;
-    const copies = must(await tx.from(t.ef).select('id,code,kgco2e,unit,co2_bio').like('code', `${base}*`).order('id', { ascending: false }));
+    const base = `ref:${ref.id}:${scopeCode}${direct ? ':sep' : ''}`;
+    const copies = must(await tx.from(t.ef).select('id,code,kgco2e,unit,co2_bio').like('code', `${base}*`).order('id', { ascending: false }))
+      .filter((c) => direct || !c.code.slice(base.length).startsWith(':sep'));
     const same = copies.find((c) => c.unit === row.unit && Number(c.kgco2e) === row.kgco2e && Number(c.co2_bio ?? 0) === Number(row.co2_bio ?? 0));
     if (same) return { id: same.id };
     row.code = copies.length ? `${base}:${copies.length + 1}` : base;
     const made = must(await tx.from(t.ef).insert(row).select('id'));
     return { id: made[0].id };
   };
+  // Septic tank: the quantity is kg CH4 and v_cfo_entry multiplies it by the GWP CH4, so the EF is a fixed one per category.
+  const efSeptic = async (t, scopeCode) => {
+    const code = `septic:${scopeCode}`;
+    const found = must(await tx.from(t.ef).select('id').eq('code', code).maybeSingle());
+    if (found) return { id: found.id };
+    const made = must(await tx.from(t.ef).insert({ code, scope_code: scopeCode, name: 'Septic Tank (kg CH₄ × GWP CH₄)', unit: 'kg CH4', kgco2e: 28, ch4: 1, reference: 'IPCC 2006 Vol.5 ch.6 (บ่อเกรอะ)', year: thisYear(), status: 'Active' }).select('id'));
+    return { id: made[0].id };
+  };
+  // type = Scope 1 / 2 / 3, or sep = การปล่อย GHG โดยตรงที่ทำการรายงานแยก (Scope 1 categories, kept out of the Scope totals)
   const activityInput = async (t, b) => {
     const row = { ef_id: Number(b.ef_id), gwp_code: text(b.gwp_code, 20) || 'AR5', department: text(b.department, 80), name: text(b.name, 200), detail: text(b.detail, 500), calc: CFO_CALCS[b.calc] ? b.calc : null, status: b.status === 'Inactive' ? 'Inactive' : 'Active' };
     if (!row.department || !row.name) return { error: 'ระบุหน่วยงานและชื่อกิจกรรม' };
+    const scopeCode = text(b.scope_code, 10);
+    const type = ['1', '2', '3', 'sep'].includes(String(b.type)) ? String(b.type) : null;
+    if (type && scopeCode && !scopeCode.startsWith(`${type === 'sep' ? 1 : type}-`)) return { error: 'หมวดไม่ตรงกับ Scope ที่เลือก' };
     if (b.ref_id) {
-      const picked = await efFromRef(t, Number(b.ref_id), text(b.scope_code, 10));
+      const picked = await efFromRef(t, Number(b.ref_id), scopeCode, type === 'sep');
       if (picked.error) return picked;
       row.ef_id = picked.id;
+    } else if (row.calc === 'septic' && !row.ef_id) {
+      if (!scopeCode) return { error: 'เลือกหมวด (Scope) ของกิจกรรม' };
+      row.ef_id = (await efSeptic(t, scopeCode)).id;
     }
     if (!row.ef_id) return { error: 'เลือก Emission factor' };
     return { row };

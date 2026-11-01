@@ -132,6 +132,32 @@ create table if not exists public.mt_${k}_scope (
   name_th text
 );
 
+insert into public.mt_${k}_scope (code, scope, name, name_th) values
+  ('1-1', 1, 'Stationary Combustion', 'การเผาไหม้เชื้อเพลิงใน Boiler, Furnace, Generator'),
+  ('1-2', 1, 'Mobile Combustion', 'รถยนต์/รถ Forklift ที่ใช้น้ำมัน'),
+  ('1-3', 1, 'Process Emissions', 'การปล่อยจากกระบวนการผลิต'),
+  ('1-4', 1, 'Fugitive Emissions', 'น้ำยาแอร์, Refrigerant, ก๊าซรั่วไหล'),
+  ('2-1', 2, 'Purchased Electricity', 'ไฟฟ้าที่ซื้อจากการไฟฟ้า'),
+  ('2-2', 2, 'Purchased Steam', 'ไอน้ำที่ซื้อมา'),
+  ('2-3', 2, 'Purchased Heating', 'ความร้อนที่ซื้อมา'),
+  ('2-4', 2, 'Purchased Cooling', 'ความเย็นที่ซื้อมา'),
+  ('3-1', 3, 'Purchased Goods & Services', 'วัตถุดิบ/สินค้า/บริการที่ซื้อ'),
+  ('3-2', 3, 'Capital Goods', 'เครื่องจักร อาคาร อุปกรณ์'),
+  ('3-3', 3, 'Fuel & Energy Related Activities', 'การผลิตและขนส่งเชื้อเพลิง/พลังงานที่ซื้อ'),
+  ('3-4', 3, 'Upstream Transportation & Distribution', 'ขนส่งวัตถุดิบเข้าสู่โรงงาน'),
+  ('3-5', 3, 'Waste Generated in Operations', 'การกำจัดของเสีย'),
+  ('3-6', 3, 'Business Travel', 'การเดินทางเพื่อธุรกิจ'),
+  ('3-7', 3, 'Employee Commuting', 'การเดินทางของพนักงาน'),
+  ('3-8', 3, 'Upstream Leased Assets', 'สินทรัพย์เช่าจากต้นน้ำ'),
+  ('3-9', 3, 'Downstream Transportation & Distribution', 'ขนส่งสินค้าไปยังลูกค้า'),
+  ('3-10', 3, 'Processing of Sold Products', 'การนำสินค้าไปแปรรูปต่อ'),
+  ('3-11', 3, 'Use of Sold Products', 'การใช้งานสินค้าที่ขาย'),
+  ('3-12', 3, 'End-of-Life Treatment of Sold Products', 'การกำจัดสินค้าหลังหมดอายุ'),
+  ('3-13', 3, 'Downstream Leased Assets', 'สินทรัพย์ที่องค์กรให้เช่า'),
+  ('3-14', 3, 'Franchises', 'แฟรนไชส์'),
+  ('3-15', 3, 'Investments', 'การลงทุน')
+on conflict (code) do nothing;
+
 -- ค่า GWP ต่อก๊าซ (เช่น AR5) ใช้คูณ kg ก๊าซ -> kgCO2e
 create table if not exists public.mt_${k}_gwp (
   code text primary key,                                  -- AR5
