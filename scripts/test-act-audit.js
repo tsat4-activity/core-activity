@@ -259,6 +259,15 @@ ok(await throws(db, `insert into mt_cfo_team (year, employee_id, role) values (2
 await db.exec(`insert into mt_cfo_team (year, employee_id, role, department) values (2026, '1', 'member', 'PD1'), (2026, '1', 'member', 'PD2')`);
 ok(true, 'one person may represent several departments');
 ok(await throws(db, `insert into mt_cfo_scope (code, scope, name) values ('4-1', 4, 'x')`), 'scope is 1-3');
+// EF reference tables (Setting > Emission Factor): the seed fills each table once, so a re-run keeps edits.
+const refSeed = fs.readFileSync(path.join(ROOT, 'db', 'act', 'cfo_ef_ref_seed.sql'), 'utf8');
+await db.exec(refSeed);
+await db.exec(`update mt_cfo_ef_ref set total = 9 where sheet = 'chemical' and name = 'R-32'`);
+await db.exec(refSeed);
+const ref = await one(db, `select (select count(*)::int from mt_cfo_ef_ref where sheet = 'energy') energy, (select count(*)::int from mt_cfo_ef_ref where sheet = 'chemical') chemical,
+  (select count(*)::int from mt_cfo_ef_ref where sheet = 'ipcc') ipcc, (select total::float from mt_cfo_ef_ref where name = 'R-32') r32, (select ch4::float from mt_cfo_gwp where code = 'AR5') ch4`);
+ok(ref.energy > 100 && ref.chemical > 10 && ref.ipcc > 40 && ref.r32 === 9 && ref.ch4 === 28, `EF reference seed runs twice without duplicates or overwrites ${JSON.stringify(ref)}`);
+ok(await throws(db, `insert into mt_cfo_ef_ref (sheet, name) values ('web', 'x')`), 'EF reference sheet is energy / chemical / ipcc');
 const cfoFile = path.join(ROOT, 'inbox', 'import_cfo.sql');
 if (!fs.existsSync(cfoFile)) {
   console.log('skip CFO data: inbox/import_cfo.sql not found (python -I scripts/import_cfo_excel.py)');

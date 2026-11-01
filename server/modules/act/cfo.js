@@ -13,6 +13,10 @@ const settingKey = (k) => SETTING_KEYS.includes(k) || /^production_\d{4}$/.test(
 const EF_NUMBERS = ['kgco2e', 'co2', 'ch4_fossil', 'ch4', 'n2o', 'sf6', 'nf3', 'hfc', 'hfc_gwp', 'pfc', 'pfc_gwp', 'other', 'other_gwp', 'co2_bio'];
 const EF_VALUES = [...EF_NUMBERS, 'unit', 'scope_code', 'separate'];
 const EF_SOURCES = ['self', 'supplier', 'th_lci', 'tgo', 'thai_res', 'int_db', 'other'];
+const GWP_GASES = ['co2', 'ch4_fossil', 'ch4', 'n2o', 'sf6', 'nf3'];
+// mt_cfo_ef_ref: energy = EF ต่อหน่วย · chemical = GWP สารเคมี · ipcc = EF ต่อ TJ
+const REF_SHEETS = ['energy', 'chemical', 'ipcc'];
+const REF_NUMBERS = ['co2', 'ch4_fossil', 'ch4', 'n2o', 'total', 'ratio'];
 // TGO Fr-03.2 criteria as % scores (e.g. 5.00), like the user's sheet: significant = has a source and scores on at least one.
 export const S3_CRITERIA = ['magnitude', 'influence', 'risk', 'sector', 'outsourcing', 'engagement'];
 // 0–100 with 2 decimals (an old ✓ / × column reads true / false = 1 / 0).
@@ -227,19 +231,22 @@ export function mountCfo(app) {
 
   // ---------- Setting: master data (admin of this year edits) ----------
   route('get', '/api/act/:activity/cfo/master', async (req, res, activity, t) => {
-    const [scopes, gwp, ef, activities, used, settings] = await Promise.all([
+    const [scopes, gwp, ef, refs, activities, used, settings] = await Promise.all([
       fetchAll(() => tx.from(t.cfoScope).select('*').order('scope').order('code')),
       fetchAll(() => tx.from(t.gwp).select('*').order('code')),
       fetchAll(() => tx.from(t.ef).select('*').order('scope_code').order('id')),
+      fetchAll(() => tx.from(t.efRef).select('*').order('sheet').order('sort_no').order('id')),
       fetchAll(() => tx.from(t.activity).select('*').order('department').order('id')),
-      fetchAll(() => tx.from(t.entry).select('ef_id,activity_id').order('id')),
+      fetchAll(() => tx.from(t.entry).select('ef_id,activity_id,gwp_code').order('id')),
       settingsOf(t)
     ]);
     const usedEf = new Set(used.map((u) => u.ef_id));
+    const usedGwp = new Set([...used, ...activities].map((u) => u.gwp_code));
     const usedAct = new Set(used.map((u) => u.activity_id));
     res.json({
       admin: (await accessOf(req, activity, thisYear())).admin,
-      scopes, gwp, settings,
+      scopes, settings, refs,
+      gwp: gwp.map((g) => ({ ...g, used: usedGwp.has(g.code) })),
       ef: ef.map((e) => ({ ...e, used: usedEf.has(e.id) })),
       activities: activities.map((a) => ({ ...a, used: usedAct.has(a.id) }))
     });
@@ -283,6 +290,87 @@ export function mountCfo(app) {
     if (usedBy) return fail(res, 400, 'EF นี้ถูกใช้แล้ว ลบไม่ได้ ให้ตั้งเป็น Inactive');
     const gone = must(await tx.from(t.ef).delete().eq('id', id).select('code,scope_code,name'));
     if (gone[0]) await logRev(t, req, 'Emission Factor', gone[0].code || `${gone[0].scope_code} ${gone[0].name}`, 'ลบ EF');
+    res.json({ ok: true });
+  });
+
+  // ---------- Setting > Emission Factor: GWP + reference tables (EF TGO AR5 V2, ผู้ใช้กำหนด 2026-11-01) ----------
+  // A GWP set that activities or entries point at keeps its values (v_cfo_entry reads them live): add a new code instead.
+  const gwpInput = (b) => {
+    const row = { code: text(b.code, 20), reference: text(b.reference, 500), status: b.status === 'Inactive' ? 'Inactive' : 'Active' };
+    for (const k of GWP_GASES) row[k] = numOrNull(b[k]) ?? (k === 'co2' ? 1 : 0);
+    if (!row.code) return { error: 'ระบุรหัส GWP (เช่น AR5)' };
+    if (GWP_GASES.some((k) => Number.isNaN(row[k]) || row[k] < 0)) return { error: 'ค่า GWP ไม่ถูกต้อง' };
+    return { row };
+  };
+  const gwpUsed = async (t, code) => must(await tx.from(t.activity).select('id').eq('gwp_code', code).limit(1)).length + must(await tx.from(t.entry).select('id').eq('gwp_code', code).limit(1)).length > 0;
+  route('post', '/api/act/:activity/cfo/gwp', async (req, res, activity, t) => {
+    if (!(await requireAdmin(req, res, activity, thisYear()))) return;
+    const { row, error } = gwpInput(req.body || {});
+    if (error) return fail(res, 400, error);
+    if (must(await tx.from(t.gwp).select('code').eq('code', row.code).maybeSingle())) return fail(res, 400, `มี GWP ${row.code} แล้ว`);
+    must(await tx.from(t.gwp).insert(row));
+    await logRev(t, req, 'GWP', row.code, `เพิ่ม GWP CH₄ ${row.ch4} · N₂O ${row.n2o}`);
+    res.status(201).json({ ok: true });
+  });
+  route('patch', '/api/act/:activity/cfo/gwp/:code', async (req, res, activity, t) => {
+    if (!(await requireAdmin(req, res, activity, thisYear()))) return;
+    const current = must(await tx.from(t.gwp).select('*').eq('code', req.params.code).maybeSingle());
+    if (!current) return fail(res, 404, 'ไม่พบ GWP');
+    const { row, error } = gwpInput({ ...req.body, code: current.code });
+    if (error) return fail(res, 400, error);
+    if (GWP_GASES.some((k) => Number(row[k]) !== Number(current[k])) && (await gwpUsed(t, current.code))) return fail(res, 400, 'GWP นี้ถูกใช้แล้ว แก้ค่าไม่ได้ ให้เพิ่มรหัสใหม่แล้วปิดตัวเดิม');
+    must(await tx.from(t.gwp).update(row).eq('code', current.code));
+    await logRev(t, req, 'GWP', current.code, changes(current, row, Object.keys(row)));
+    res.json({ ok: true });
+  });
+  route('delete', '/api/act/:activity/cfo/gwp/:code', async (req, res, activity, t) => {
+    if (!(await requireAdmin(req, res, activity, thisYear()))) return;
+    if (await gwpUsed(t, req.params.code)) return fail(res, 400, 'GWP นี้ถูกใช้แล้ว ลบไม่ได้ ให้ตั้งเป็น Inactive');
+    const gone = must(await tx.from(t.gwp).delete().eq('code', req.params.code).select('code'));
+    if (gone[0]) await logRev(t, req, 'GWP', gone[0].code, 'ลบ GWP');
+    res.json({ ok: true });
+  });
+
+  // Reference rows are for reading and copying only (nothing is computed from them), so they stay editable.
+  // Total left empty with gas values = CO₂ + gas × GWP of the Active set (AR5 first), like the sheet's formula.
+  const refInput = async (t, b) => {
+    const row = { sheet: REF_SHEETS.includes(b.sheet) ? b.sheet : null, grp: text(b.grp, 120), name: text(b.name, 300), formula: text(b.formula, 120), unit: text(b.unit, 30),
+      reference: text(b.reference, 1000), remark: text(b.remark, 1000), status: b.status === 'Inactive' ? 'Inactive' : 'Active' };
+    for (const k of REF_NUMBERS) row[k] = numOrNull(b[k]);
+    row.sort_no = numOrNull(b.sort_no);
+    if (!row.sheet || !row.name) return { error: 'ระบุตารางและชื่อ' };
+    if ([...REF_NUMBERS, 'sort_no'].some((k) => Number.isNaN(row[k]))) return { error: 'ค่าตัวเลขไม่ถูกต้อง' };
+    if (row.total == null && ['co2', 'ch4_fossil', 'ch4', 'n2o'].some((k) => row[k] != null)) {
+      const sets = must(await tx.from(t.gwp).select('*').eq('status', 'Active').order('code'));
+      const g = sets.find((x) => x.code === 'AR5') || sets[0] || { ch4_fossil: 0, ch4: 0, n2o: 0 };
+      row.total = Number(((row.co2 || 0) + (row.ch4_fossil || 0) * g.ch4_fossil + (row.ch4 || 0) * g.ch4 + (row.n2o || 0) * g.n2o).toPrecision(12));
+    }
+    return { row };
+  };
+  route('post', '/api/act/:activity/cfo/ref', async (req, res, activity, t) => {
+    if (!(await requireAdmin(req, res, activity, thisYear()))) return;
+    const { row, error } = await refInput(t, req.body || {});
+    if (error) return fail(res, 400, error);
+    if (row.sort_no == null) {
+      const last = must(await tx.from(t.efRef).select('sort_no').eq('sheet', row.sheet).order('sort_no', { ascending: false }).limit(1));
+      row.sort_no = (last[0]?.sort_no || 0) + 1;
+    }
+    must(await tx.from(t.efRef).insert(row));
+    res.status(201).json({ ok: true });
+  });
+  route('patch', '/api/act/:activity/cfo/ref/:id', async (req, res, activity, t) => {
+    if (!(await requireAdmin(req, res, activity, thisYear()))) return;
+    const current = must(await tx.from(t.efRef).select('id,sort_no').eq('id', Number(req.params.id)).maybeSingle());
+    if (!current) return fail(res, 404, 'ไม่พบรายการ');
+    const { row, error } = await refInput(t, req.body || {});
+    if (error) return fail(res, 400, error);
+    if (row.sort_no == null) row.sort_no = current.sort_no;
+    must(await tx.from(t.efRef).update(row).eq('id', current.id));
+    res.json({ ok: true });
+  });
+  route('delete', '/api/act/:activity/cfo/ref/:id', async (req, res, activity, t) => {
+    if (!(await requireAdmin(req, res, activity, thisYear()))) return;
+    must(await tx.from(t.efRef).delete().eq('id', Number(req.params.id)));
     res.json({ ok: true });
   });
 

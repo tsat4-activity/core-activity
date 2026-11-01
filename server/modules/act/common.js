@@ -30,6 +30,7 @@ export function tablesOf(activity) {
     cfoScope: `mt_${k}_scope`,
     gwp: `mt_${k}_gwp`,
     ef: `mt_${k}_ef`,
+    efRef: `mt_${k}_ef_ref`, // reference tables of EF TGO AR5 V2 (energy / chemical / ipcc)
     activity: `mt_${k}_activity`,
     entry: `tx_${k}_entry`,
     entryView: `v_${k}_entry`,

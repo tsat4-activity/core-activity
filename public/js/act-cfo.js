@@ -1,6 +1,6 @@
 // ระบบกิจกรรม > CFO (Carbon Footprint for Organization): Dashboard (Summary / Scope / TGO forms Fr-01, Fr-03.1,
 // Fr-03.2, Fr-04.1 + บันทึกการปรับปรุง),
-// transaction (TSATP4-CFO Scope pages + บันทึกกิจกรรม), Setting (plan / activities / emission factors / team / company). Server: server/modules/act/cfo.js
+// transaction (TSATP4-CFO Scope pages + บันทึกกิจกรรม), Setting (plan / activities / emission factors + GWP + reference tables / team / company). Server: server/modules/act/cfo.js
 // spec: docs/specs/act-cfo.md · uses the shared year (a5Year), page bar slots and team tab of act-5s.js.
 const CFO = 'cfo';
 // Scope 1/2/3 colours = the shared chart palette (core.js CHART, green here): this year greens, the base year slate.
@@ -33,12 +33,27 @@ const CFO_EF_GAS = [['co2', 'CO₂'], ['ch4_fossil', 'Fossil CH₄'], ['ch4', 'C
   ['other', 'GHG นอกข้อกำหนด'], ['other_gwp', 'GWP นอกข้อกำหนด'], ['co2_bio', 'CO₂ ชีวมวล (รายงานแยก)']];
 let cfoDashTab = 'summary';
 let cfoSetTab = 'team';
-const cfoFilter = { scope: '', department: '', q: '', status: '' };
+// Setting > Emission Factor (ผู้ใช้กำหนด 2026-11-01): the EF that activities use + separate reference tables of the TGO sheet
+// "EF TGO AR5 V2" (mt_cfo_ef_ref, seed db/act/cfo_ef_ref_seed.sql) so each table is easy to read and add to.
+const CFO_EF_VIEWS = { ef: 'EF ที่ใช้คำนวณ', gwp: 'GWP', energy: 'EF พลังงาน (ต่อหน่วย)', chemical: 'GWP สารเคมี', ipcc: 'EF IPCC (ต่อ TJ)' };
+let cfoEfView = 'ef';
+const CFO_GWP_GASES = [['co2', 'CO₂'], ['ch4_fossil', 'Fossil CH₄'], ['ch4', 'CH₄'], ['n2o', 'N₂O'], ['sf6', 'SF₆'], ['nf3', 'NF₃']];
+// Columns of each reference table as in the sheet: [key, label, unit line, number column]
+const CFO_REF_COLS = {
+  energy: { title: 'GHG Emission Factors for energy consumption (per unit)', cols: [['name', 'Emission Source'], ['unit', 'Units'], ['co2', 'CO₂', '(kgCO₂/unit)', 1], ['ch4_fossil', 'Fossil CH₄', '(kgCH₄/unit)', 1],
+    ['ch4', 'CH₄', '(kgCH₄/unit)', 1], ['n2o', 'N₂O', '(kgN₂O/unit)', 1], ['total', 'Total', '(kgCO₂-eq/unit)', 1], ['reference', 'Emission Reference'], ['remark', 'หมายเหตุ']] },
+  chemical: { title: 'Global warming potential ของสารเคมี / สารทำความเย็น', cols: [['name', 'Common chemical name'], ['formula', 'สูตร / ชื่ออื่น'], ['unit', 'Units'], ['total', 'GWP Total', '(kgCO₂-eq/unit)', 1], ['reference', 'Reference']] },
+  ipcc: { title: 'GHG Emission Factors from IPCC Guidelines', cols: [['name', 'Emission Source'], ['co2', 'CO₂', '(kgCO₂/TJ)', 1], ['ch4_fossil', 'Fossil CH₄', '(kgCH₄/TJ)', 1], ['ch4', 'CH₄', '(kgCH₄/TJ)', 1],
+    ['n2o', 'N₂O', '(kgN₂O/TJ)', 1], ['total', 'Total', '(kgCO₂-eq/TJ)', 1], ['reference', 'Emission Reference']] }
+};
+const cfoFilter = { scope: '', department: '', q: '', status: '', group: '' };
 // page: Summary หน้า 1 (monthly accumulation) / หน้า 2 (summary by Scope), picked in the dropdown before the year
 const cfoDash = { department: '', chartScope: '', scope: '1', page: '1' };
 // transaction filters: Scope → month (one month, or '' = the year) → category (main) → activity (sub)
 const cfoTx = { scope: '1', month: String(new Date().getMonth() + 1), category: '', activity: '' };
 const cfoHeads = { entries: { sort: '', dir: 'asc', filters: {} }, activities: { sort: '', dir: 'asc', filters: {} }, ef: { sort: '', dir: 'asc', filters: {} } };
+// small EF values (1.02e-6) stay readable: exponent below 0.001, else up to 6 decimals like the sheet
+const cfoEfNum = (v) => (v == null || v === '' ? '' : Number(v) === 0 ? '0' : Math.abs(v) < 0.001 ? Number(v).toExponential(3) : Number(v).toLocaleString('en-US', { maximumFractionDigits: 6 }));
 
 const cfoT = (n) => Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: 3 });
 const cfoPct = (part, total) => (total ? `${Math.round((part / total) * 1000) / 10}%` : '0%');
@@ -705,7 +720,7 @@ async function cfoSetting(target) {
   if (cfoSetTab === 'team') return a5SetTeam(body, CFO, me.access.admin, rerender, CFO_ROLE_LABEL);
   if (cfoSetTab === 's3') return cfoSetS3(body, rerender);
   const m = await a5Api(CFO, 'cfo/master');
-  const draw = { activities: cfoSetActivities, ef: cfoSetEf, company: cfoSetCompany }[cfoSetTab] || cfoSetActivities;
+  const draw = { activities: cfoSetActivities, ef: cfoSetEfTab, company: cfoSetCompany }[cfoSetTab] || cfoSetActivities;
   draw(body, m, rerender);
 }
 
@@ -830,6 +845,158 @@ function cfoSetEf(body, m, rerender) {
   $('cfo-edit').onclick = () => picked && form(picked);
   $('cfo-del').onclick = () => picked && confirmPopup('ลบ EF', `ลบ ${esc(picked.name)}`, async () => {
     await a5Api(CFO, `cfo/ef/${picked.id}`, { method: 'DELETE' });
+    toast('ลบแล้ว');
+    rerender();
+  });
+}
+
+// Emission Factor tab: one table at a time, picked in the row of buttons above it.
+function cfoSetEfTab(body, m, rerender) {
+  body.innerHTML = `<div class="cfo-efnav">${a5Seg('data-cfoef', CFO_EF_VIEWS, cfoEfView)}</div><div id="cfo-efbody"></div>`;
+  body.querySelectorAll('[data-cfoef]').forEach((node) => { node.onclick = () => { cfoEfView = node.dataset.cfoef; cfoSetEfTab(body, m, rerender); }; });
+  const box = $('cfo-efbody');
+  if (cfoEfView === 'gwp') return cfoSetGwp(box, m, rerender);
+  if (CFO_REF_COLS[cfoEfView]) return cfoSetRef(box, m, rerender, cfoEfView);
+  return cfoSetEf(box, m, rerender);
+}
+
+// GWP100a per gas (mt_cfo_gwp) · a set that activities use keeps its values: add a new code and set the old one Inactive.
+function cfoSetGwp(body, m, rerender) {
+  let picked = null;
+  body.innerHTML = `
+    <div class="toolbar a5-filters"><strong class="plan-label">Global Warming Potential (GWP₁₀₀ₐ)</strong>
+      ${m.admin ? `<div class="action-bar">${button('cfo-add', 'เพิ่ม', 'primary')}${button('cfo-edit', 'แก้ไข', 'secondary', 'disabled')}${button('cfo-del', 'ลบ', 'danger', 'disabled')}</div>` : ''}</div>
+    <div class="table-wrap sheet" id="cfo-rows"></div>
+    <p class="sum-meta">กิจกรรมเลือกชุด GWP ที่ใช้ (Setting > กิจกรรม) · ชุดที่ใช้แล้วแก้ค่าไม่ได้ ให้เพิ่มรหัสใหม่แล้วตั้งตัวเดิมเป็น Inactive</p>`;
+  fillTable('cfo-rows', ['รหัส', ...CFO_GWP_GASES.map(([, label]) => ({ label, num: true })), 'อ้างอิง', 'ใช้แล้ว', 'สถานะ'],
+    m.gwp.map((g) => `<tr data-pick="${esc(g.code)}"><td><b>${esc(g.code)}</b></td>${CFO_GWP_GASES.map(([k]) => `<td class="num">${cfoEfNum(g[k])}</td>`).join('')}<td>${esc(g.reference || '')}</td><td>${g.used ? '✓' : ''}</td><td>${esc(g.status)}</td></tr>`).join(''), 'ยังไม่มี GWP');
+  a5Lift(body);
+  bindRowSelect($('cfo-rows'), (code) => { picked = m.gwp.find((g) => g.code === code); ['cfo-edit', 'cfo-del'].forEach((b) => { if ($(b)) $(b).disabled = !picked; }); });
+  if (!m.admin) return;
+  const status = [['Active', 'Active'], ['Inactive', 'Inactive']];
+  $('cfo-add').onclick = () => {
+    openPopup('เพิ่ม GWP', gridField('cfo-grid', [{ key: 'code', label: 'รหัส', width: '90px' }, ...CFO_GWP_GASES.map(([key, label]) => ({ key, label, type: 'number', width: '90px' })),
+      { key: 'reference', label: 'อ้างอิง' }, { key: 'status', label: 'สถานะ', type: 'select', options: status, value: 'Active', width: '110px' }], 2), async () => {
+      const n = await gridSave(grid, (v) => a5Api(CFO, 'cfo/gwp', { method: 'POST', body: v }));
+      toast(`เพิ่ม ${n} ชุด`);
+      closePopup();
+      rerender();
+    });
+    const grid = gridBind('cfo-grid');
+  };
+  $('cfo-edit').onclick = () => {
+    if (!picked) return;
+    const g = picked;
+    const lock = g.used ? ' disabled' : '';
+    openPopup(`แก้ไข GWP ${g.code}`, `
+      ${g.used ? '<p class="sum-meta">ชุดนี้ถูกใช้แล้ว แก้ได้เฉพาะอ้างอิงและสถานะ</p>' : ''}
+      <div class="cfo-gas">${CFO_GWP_GASES.map(([k, label]) => field(label, `<input id="cfo-g-${k}" type="number" step="any" value="${esc(g[k] ?? '')}"${lock}>`)).join('')}</div>
+      ${field('อ้างอิง', `<input id="cfo-g-ref" maxlength="500" value="${esc(g.reference || '')}">`)}
+      ${field('สถานะ', `<select id="cfo-g-status">${options(['Active', 'Inactive'], g.status)}</select>`)}`, async () => {
+      const body2 = { reference: $('cfo-g-ref').value, status: $('cfo-g-status').value };
+      CFO_GWP_GASES.forEach(([k]) => { body2[k] = $(`cfo-g-${k}`).value; });
+      await a5Api(CFO, `cfo/gwp/${encodeURIComponent(g.code)}`, { method: 'PATCH', body: body2 });
+      toast('บันทึกแล้ว');
+      closePopup();
+      rerender();
+    });
+  };
+  $('cfo-del').onclick = () => picked && confirmPopup('ลบ GWP', `ลบชุด ${esc(picked.code)}`, async () => {
+    await a5Api(CFO, `cfo/gwp/${encodeURIComponent(picked.code)}`, { method: 'DELETE' });
+    toast('ลบแล้ว');
+    rerender();
+  });
+}
+
+// Reference table (energy / chemical / ipcc) laid out like the sheet: group bands, a two-line header with the units,
+// heading rows (no unit, no value) in bold and "- …" rows indented. Total left empty = CO₂ + gases × GWP (server).
+function cfoSetRef(body, m, rerender, sheet) {
+  const spec = CFO_REF_COLS[sheet];
+  const rows = m.refs.filter((r) => r.sheet === sheet);
+  const groups = [...new Set(rows.map((r) => r.grp).filter(Boolean))];
+  const gwp = m.gwp.find((g) => g.code === 'AR5' && g.status === 'Active') || m.gwp.find((g) => g.status === 'Active') || {};
+  let picked = null;
+  const thead = `<tr>${spec.cols.map(([, label, unit]) => `<th${unit ? ' class="num"' : ' rowspan="2"'}>${esc(label)}</th>`).join('')}</tr>
+    <tr>${spec.cols.filter((c) => c[2]).map((c) => `<th class="num cfo-unit">${esc(c[2])}</th>`).join('')}</tr>`;
+  const draw = () => {
+    const term = cfoFilter.q.trim().toLowerCase();
+    const list = rows.filter((r) => (!cfoFilter.status || r.status === cfoFilter.status) && (!cfoFilter.group || r.grp === cfoFilter.group)
+      && (!term || `${r.name} ${r.formula || ''} ${r.grp || ''} ${r.reference || ''}`.toLowerCase().includes(term)));
+    let band;
+    const html = list.map((r) => {
+      const top = r.grp !== band ? `<tr class="cfo-band"><td colspan="${spec.cols.length}">${esc(r.grp || 'ไม่ระบุกลุ่ม')}</td></tr>` : '';
+      band = r.grp;
+      const heading = !r.unit && r.total == null && r.co2 == null;
+      const child = /^-\s/.test(r.name);
+      const cell = ([key, , , num]) => {
+        if (num) return `<td class="num">${cfoEfNum(r[key])}</td>`;
+        if (key === 'name') return `<td class="${heading ? 'cfo-head' : ''}${child ? ' cfo-child' : ''}">${esc(child ? r.name.replace(/^-\s*/, '') : r.name)}${r.ratio != null ? ` <span class="sum-meta">(สัดส่วน ${cfoEfNum(r.ratio)})</span>` : ''}</td>`;
+        if (key === 'reference' || key === 'remark') return `<td class="cfo-ref" title="${esc(r[key] || '')}">${esc(r[key] || '')}</td>`;
+        return `<td>${esc(r[key] || '')}</td>`;
+      };
+      return `${top}<tr data-pick="${r.id}"${r.status === 'Inactive' ? ' class="is-muted"' : ''}>${spec.cols.map(cell).join('')}</tr>`;
+    }).join('') || `<tr><td class="empty" colspan="${spec.cols.length}">ยังไม่มีรายการ</td></tr>`;
+    $('cfo-rows').innerHTML = `<table class="mo-data-table cfo-reftab"><thead>${thead}</thead><tbody>${html}</tbody></table>`;
+    picked = null;
+    ['cfo-edit', 'cfo-del'].forEach((b) => { if ($(b)) $(b).disabled = true; });
+    bindRowSelect($('cfo-rows'), (id) => { picked = rows.find((r) => String(r.id) === id); ['cfo-edit', 'cfo-del'].forEach((b) => { if ($(b)) $(b).disabled = !picked; }); });
+  };
+  if (cfoFilter.group && !groups.includes(cfoFilter.group)) cfoFilter.group = '';
+  body.innerHTML = `
+    <div class="toolbar a5-filters"><strong class="plan-label">${esc(spec.title)}</strong>
+      ${field('กลุ่ม', `<select id="cfo-f-group">${options(['', ...groups], cfoFilter.group, (v) => v || 'ทั้งหมด')}</select>`)}
+      ${field('สถานะ', `<select id="cfo-f-status">${options(['', 'Active', 'Inactive'], cfoFilter.status, (v) => v || 'ทั้งหมด')}</select>`)}
+      ${searchSlot('ค้นหา', 'cfo-f-q', 'cfo-f-search', { placeholder: 'ชื่อ หรืออ้างอิง' })}
+      ${m.admin ? `<div class="action-bar">${button('cfo-add', 'เพิ่ม', 'primary')}${button('cfo-edit', 'แก้ไข', 'secondary', 'disabled')}${button('cfo-del', 'ลบ', 'danger', 'disabled')}</div>` : ''}
+    </div>
+    <div class="table-wrap sheet" id="cfo-rows"></div>
+    <p class="sum-meta">${rows.length} รายการ · ตารางอ้างอิงตามแผ่น EF TGO AR5 V2 ไว้ดูค่าและที่มา (กิจกรรมใช้ค่าจาก "EF ที่ใช้คำนวณ") · Total ว่าง = คิดจาก GWP ${esc(gwp.code || '')} (CO₂ + Fossil CH₄ × ${gwp.ch4_fossil ?? '-'} + CH₄ × ${gwp.ch4 ?? '-'} + N₂O × ${gwp.n2o ?? '-'})</p>`;
+  $('cfo-f-q').value = cfoFilter.q;
+  draw();
+  a5Lift(body);
+  $('cfo-f-group').onchange = () => { cfoFilter.group = $('cfo-f-group').value; draw(); };
+  $('cfo-f-status').onchange = () => { cfoFilter.status = $('cfo-f-status').value; draw(); };
+  const search = () => { cfoFilter.q = $('cfo-f-q').value; draw(); };
+  $('cfo-f-search').onclick = search;
+  onEnter('cfo-f-q', search);
+  if (!m.admin) return;
+  const fields = spec.cols.map(([key, label, unit, num]) => ({ key, label: unit ? `${label} ${unit}` : label, type: num ? 'number' : undefined }));
+  const fixed = sheet === 'ipcc' ? { unit: 'TJ' } : {};
+  $('cfo-add').onclick = () => {
+    const lastGroup = rows[rows.length - 1]?.grp || '';
+    openPopup(`เพิ่ม: ${spec.title}`, gridField('cfo-grid', [{ key: 'grp', label: 'กลุ่ม', value: lastGroup, width: '140px' }, ...fields.map((f) => ({ ...f, width: f.type ? '100px' : undefined }))], 5,
+      'คัดลอกหลายแถวจาก Excel แล้ววาง (Ctrl+V) · Total ว่าง = คิดจาก GWP · แถวว่างไม่บันทึก'), async () => {
+      const n = await gridSave(grid, (v) => a5Api(CFO, 'cfo/ref', { method: 'POST', body: { ...fixed, ...v, sheet } }));
+      toast(`เพิ่ม ${n} รายการ`);
+      closePopup();
+      rerender();
+    });
+    const grid = gridBind('cfo-grid');
+  };
+  $('cfo-edit').onclick = () => {
+    if (!picked) return;
+    const r = picked;
+    const area = (key) => key === 'reference' || key === 'remark';
+    openPopup('แก้ไขรายการ', `
+      ${field('กลุ่ม', `<input id="cfo-r-grp" maxlength="120" list="cfo-groups" value="${esc(r.grp || '')}"><datalist id="cfo-groups">${groups.map((v) => `<option value="${esc(v)}">`).join('')}</datalist>`)}
+      ${fields.filter((f) => !f.type).map((f) => field(f.label, area(f.key) ? `<textarea id="cfo-r-${f.key}" rows="2" maxlength="1000">${esc(r[f.key] || '')}</textarea>` : `<input id="cfo-r-${f.key}" maxlength="300" value="${esc(r[f.key] || '')}">`)).join('')}
+      <div class="cfo-gas">${fields.filter((f) => f.type).map((f) => field(f.label, `<input id="cfo-r-${f.key}" type="number" step="any" value="${esc(r[f.key] ?? '')}">`)).join('')}
+        ${field('สัดส่วนชีวมวล', `<input id="cfo-r-ratio" type="number" step="any" value="${esc(r.ratio ?? '')}">`)}${field('ลำดับ', `<input id="cfo-r-sort" type="number" value="${esc(r.sort_no)}">`)}</div>
+      ${field('สถานะ', `<select id="cfo-r-status">${options(['Active', 'Inactive'], r.status)}</select>`)}`, async () => {
+      const body2 = { ...fixed, sheet, grp: $('cfo-r-grp').value, ratio: $('cfo-r-ratio').value, sort_no: $('cfo-r-sort').value, status: $('cfo-r-status').value };
+      fields.forEach((f) => { body2[f.key] = $(`cfo-r-${f.key}`).value; });
+      await a5Api(CFO, `cfo/ref/${r.id}`, { method: 'PATCH', body: body2 });
+      toast('บันทึกแล้ว');
+      closePopup();
+      rerender();
+    });
+    // the gas values drive Total like the sheet's formula (it can still be typed over)
+    const gases = ['co2', 'ch4_fossil', 'ch4', 'n2o'].filter((k) => $(`cfo-r-${k}`));
+    const v = (key) => Number($(`cfo-r-${key}`)?.value || 0);
+    gases.forEach((k) => { $(`cfo-r-${k}`).oninput = () => { $('cfo-r-total').value = Number((v('co2') + v('ch4_fossil') * (gwp.ch4_fossil || 0) + v('ch4') * (gwp.ch4 || 0) + v('n2o') * (gwp.n2o || 0)).toPrecision(12)); }; });
+  };
+  $('cfo-del').onclick = () => picked && confirmPopup('ลบรายการ', `ลบ ${esc(picked.name)}`, async () => {
+    await a5Api(CFO, `cfo/ref/${picked.id}`, { method: 'DELETE' });
     toast('ลบแล้ว');
     rerender();
   });
