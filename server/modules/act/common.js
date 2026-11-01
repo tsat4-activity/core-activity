@@ -19,6 +19,7 @@ export function tablesOf(activity) {
     setting: `mt_${k}_setting`,
     task: `mt_${k}_task`, // Project Planner (planner.js)
     project: `mt_${k}_project`, // SMF projects per year (smf.js)
+    projectMonth: `tx_${k}_project_month`, // Monthly target and actual per project (smf.js)
     area: `mt_${k}_area`,
     checklist: `mt_${k}_checklist`,
     auditPlan: `mt_${k}_audit_plan`,
@@ -137,7 +138,7 @@ export async function unitsOf(activity, year, activeOnly = false) {
 // [{ code, name, status }] of the year, in screen order (SMF projects); [] for other activities.
 export async function projectsOf(activity, year) {
   if (!PROJECT_ON.includes(activity)) return [];
-  const { data, error } = await tx.from(tablesOf(activity).project).select('id,code,name,sort_no,status').eq('year', year).order('sort_no').order('id');
+  const { data, error } = await tx.from(tablesOf(activity).project).select('id,code,name,sort_no,status,target_name,unit').eq('year', year).order('sort_no').order('id');
   if (error?.code === 'PGRST205') return [];
   if (error) throw error;
   return data || [];

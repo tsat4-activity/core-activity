@@ -23,7 +23,12 @@ export function mountSmf(app) {
     if (!name) return { error: 'ระบุชื่อโครงการ' };
     if (!CODE.test(code)) return { error: 'รหัสใช้ a–z 0–9 - _ ไม่เกิน 20 ตัว เช่น oee' };
     const sort = Number(body?.sortNo);
-    return { row: { name, code, sort_no: Number.isInteger(sort) && sort > 0 ? sort : 1, status: body?.status === 'Inactive' ? 'Inactive' : 'Active' } };
+    const targetName = body?.targetName != null ? String(body.targetName).trim().slice(0, 80) || null : undefined;
+    const unit = body?.unit != null ? String(body.unit).trim().slice(0, 30) || null : undefined;
+    const row = { name, code, sort_no: Number.isInteger(sort) && sort > 0 ? sort : 1, status: body?.status === 'Inactive' ? 'Inactive' : 'Active' };
+    if (targetName !== undefined) row.target_name = targetName;
+    if (unit !== undefined) row.unit = unit;
+    return { row };
   };
 
   route('get', '/api/act/:activity/projects', async (req, res, activity) => {
@@ -76,8 +81,58 @@ export function mountSmf(app) {
     if (!(await requireAdmin(req, res, activity, to))) return;
     const rows = (await projectsOf(activity, from)).filter((p) => p.status === 'Active');
     if (!rows.length) return fail(res, 400, `ปี ${from} ไม่มีโครงการ Active ให้คัดลอก`);
-    const done = await tx.from(tablesOf(activity).project).upsert(rows.map(({ code, name, sort_no, status }) => ({ year: to, code, name, sort_no, status })), { onConflict: 'year,code', ignoreDuplicates: true });
+    const done = await tx.from(tablesOf(activity).project).upsert(rows.map(({ code, name, sort_no, status, target_name, unit }) => ({ year: to, code, name, sort_no, status, target_name, unit })), { onConflict: 'year,code', ignoreDuplicates: true });
     must(done);
     res.json({ ok: true, copied: rows.length });
+  });
+
+  // Monthly Target & Actual for each project (ผู้ใช้สั่ง 2026-11-01)
+  route('get', '/api/act/:activity/project-months', async (req, res, activity, t) => {
+    const year = yearOf(req.query.year);
+    if (!year) return fail(res, 400, 'ปีไม่ถูกต้อง');
+    const projects = await projectsOf(activity, year);
+    const { data, error } = await tx.from(t.projectMonth).select('*').eq('year', year).order('month');
+    if (error?.code === 'PGRST205') return res.json({ year, projects, months: [] });
+    if (error) throw error;
+    res.json({ year, projects, months: data || [] });
+  });
+
+  route('put', '/api/act/:activity/project-months', async (req, res, activity, t) => {
+    const year = yearOf(req.body?.year);
+    if (!year) return fail(res, 400, 'ปีไม่ถูกต้อง');
+    const projectId = Number(req.body?.projectId);
+    if (!projectId) return fail(res, 400, 'ระบุโครงการ');
+    const project = must(await tx.from(t.project).select('*').eq('id', projectId).eq('year', year).maybeSingle());
+    if (!project) return fail(res, 404, 'ไม่พบโครงการ');
+
+    const access = await accessOf(req, activity, year);
+    if (!access.admin && !access.member) return fail(res, 403, 'ไม่มีสิทธิ์บันทึกข้อมูลโครงการนี้');
+
+    const rawList = Array.isArray(req.body?.months) ? req.body.months : [req.body];
+    const rows = [];
+    for (const item of rawList) {
+      const month = Number(item.month);
+      if (!Number.isInteger(month) || month < 1 || month > 12) continue;
+      const target = item.target != null && item.target !== '' ? Number(item.target) : null;
+      const actual = item.actual != null && item.actual !== '' ? Number(item.actual) : null;
+      if (target != null && Number.isNaN(target)) return fail(res, 400, `Target เดือน ${month} ไม่ถูกต้อง`);
+      if (actual != null && Number.isNaN(actual)) return fail(res, 400, `Actual เดือน ${month} ไม่ถูกต้อง`);
+      const note = item.note != null ? String(item.note).trim().slice(0, 300) : null;
+      rows.push({
+        year,
+        project_id: projectId,
+        month,
+        target,
+        actual,
+        note,
+        updated_by: req.user.employeeId,
+        updated_at: new Date().toISOString()
+      });
+    }
+    if (!rows.length) return fail(res, 400, 'ไม่มีข้อมูลเดือนที่ถูกต้อง');
+
+    const done = await tx.from(t.projectMonth).upsert(rows, { onConflict: 'project_id,month' });
+    must(done);
+    res.json({ ok: true, saved: rows.length });
   });
 }

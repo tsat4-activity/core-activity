@@ -551,18 +551,28 @@ async function aplSetProjects(body, activity, admin, rerender) {
   body.innerHTML = `
     ${admin ? `<div class="action-bar a5-actions">${button('apl-p-add', 'เพิ่มโครงการ', 'primary')}${button('apl-p-edit', 'แก้ไข', 'secondary', 'disabled')}${button('apl-p-del', 'ลบ', 'danger', 'disabled')}${button('apl-p-copy', `คัดลอกจากปี ${a5Year - 1}`)}</div>` : ''}
     <div class="table-wrap sheet" id="apl-p-rows"></div>
-    <p class="sum-meta">${projects.length} โครงการ ปี ${a5Year} · แต่ละโครงการมีทีม (Setting > ทีม เลือก ทีม = โครงการ) และแผนงาน (ข้อหลักเลือกโครงการ) ของตัวเอง</p>`;
-  fillTable('apl-p-rows', ['ลำดับ', 'รหัส', 'ชื่อโครงการ', 'สถานะ'], projects.map((p) => `<tr data-pick="${p.id}"><td>${p.sort_no}</td><td>${esc(p.code)}</td><td>${esc(p.name)}</td><td>${esc(p.status)}</td></tr>`).join(''), `ยังไม่มีโครงการปี ${a5Year}`);
+    <p class="sum-meta">${projects.length} โครงการ ปี ${a5Year} · แต่ละโครงการมีทีม (Setting > ทีม เลือก ทีม = โครงการ) แผนงาน (ข้อหลักเลือกโครงการ) และเป้าหมาย/ผลงานรายเดือน (Transaction)</p>`;
+  fillTable('apl-p-rows', ['ลำดับ', 'รหัส', 'ชื่อโครงการ', 'เป้าหมาย (KPI)', 'หน่วย', 'สถานะ'], projects.map((p) => `<tr data-pick="${p.id}"><td>${p.sort_no}</td><td>${esc(p.code)}</td><td>${esc(p.name)}</td><td>${esc(p.target_name || '-')}</td><td>${esc(p.unit || '-')}</td><td>${esc(p.status)}</td></tr>`).join(''), `ยังไม่มีโครงการปี ${a5Year}`);
   a5Lift(body);
   if (!admin) return;
   bindRowSelect($('apl-p-rows'), (id) => { picked = projects.find((p) => String(p.id) === id); $('apl-p-edit').disabled = !picked; $('apl-p-del').disabled = !picked; });
   const form = (p) => openPopup(p ? `แก้ไขโครงการ ${esc(p.name)}` : `เพิ่มโครงการปี ${a5Year}`, [
     field('ชื่อโครงการ', `<input id="apl-p-name" maxlength="120" value="${esc(p?.name || '')}" placeholder="เช่น Smart OEE">`),
     field('รหัส (a–z 0–9 ใช้ผูกทีมและแผน)', `<input id="apl-p-code" maxlength="20" value="${esc(p?.code || '')}" placeholder="เช่น oee">`),
+    field('ชื่อเป้าหมาย (KPI)', `<input id="apl-p-target" maxlength="80" value="${esc(p?.target_name || '')}" placeholder="เช่น OEE, Accuracy, Time Saved">`),
+    field('หน่วย', `<input id="apl-p-unit" maxlength="30" value="${esc(p?.unit || '')}" placeholder="เช่น %, ชม., ชิ้น">`),
     field('ลำดับ', `<input id="apl-p-sort" type="number" min="1" value="${p?.sort_no || projects.length + 1}">`),
     field('สถานะ', `<select id="apl-p-status">${options(['Active', 'Inactive'], p?.status || 'Active')}</select>`)
   ].join(''), async () => {
-    const payload = { year: a5Year, name: $('apl-p-name').value, code: $('apl-p-code').value, sortNo: Number($('apl-p-sort').value), status: $('apl-p-status').value };
+    const payload = {
+      year: a5Year,
+      name: $('apl-p-name').value,
+      code: $('apl-p-code').value,
+      targetName: $('apl-p-target').value,
+      unit: $('apl-p-unit').value,
+      sortNo: Number($('apl-p-sort').value),
+      status: $('apl-p-status').value
+    };
     await a5Api(activity, p ? `projects/${p.id}` : 'projects', { method: p ? 'PATCH' : 'POST', body: payload });
     toast('บันทึกแล้ว');
     closePopup();
@@ -646,16 +656,253 @@ async function aplSetting(target, activity) {
   return aplRender(body, activity, { inPage: true });
 }
 
+const smfPickedProj = {};
+
+// SMF Transaction: บันทึกเป้าหมาย (target) และผลงาน (actual) รายเดือนของแต่ละโครงการ (ผู้ใช้กำหนด 2026-11-01)
+async function smfTransaction(target, activity = 'smf') {
+  let me;
+  let pmData;
+  try {
+    [me, pmData] = await Promise.all([
+      a5Api(activity, `me?year=${a5Year}`),
+      a5Api(activity, `project-months?year=${a5Year}`)
+    ]);
+  } catch (err) {
+    target.innerHTML = `<div class="view-body"><section class="card"><p class="empty">${esc(err.message)}</p></section></div>`;
+    return;
+  }
+  const canEdit = !!(me.access?.admin || me.access?.member || me.access?.smart);
+  const projects = (pmData.projects || []).filter((p) => p.status === 'Active');
+
+  if (!projects.length) {
+    target.innerHTML = `<div class="view-body"><section class="card">
+      ${pageBar('<strong class="plan-label">เป้าหมายและผลงานรายเดือน (SMF)</strong>', `<div class="a5-year">${a5YearSelect(me.years)}</div>`, 'smf')}
+      <div id="smf-body"><p class="empty">ยังไม่มีโครงการปี ${a5Year} · เพิ่มโครงการได้ที่ Setting > โครงการ</p></div>
+    </section></div>`;
+    if ($('a5-year')) $('a5-year').onchange = () => { a5Year = Number($('a5-year').value); smfTransaction(target, activity).catch(onErr); };
+    return;
+  }
+
+  if (!smfPickedProj[activity] || !projects.some((p) => p.id === smfPickedProj[activity])) {
+    smfPickedProj[activity] = projects[0].id;
+  }
+  const currentProj = projects.find((p) => p.id === smfPickedProj[activity]) || projects[0];
+  const monthsData = (pmData.months || []).filter((m) => m.project_id === currentProj.id);
+  const byMonth = Object.fromEntries(monthsData.map((m) => [m.month, m]));
+
+  const projTabs = Object.fromEntries(projects.map((p) => [p.id, p.name]));
+  const kpiLabel = currentProj.target_name || 'เป้าหมาย';
+  const unitLabel = currentProj.unit ? ` (${currentProj.unit})` : '';
+
+  const rowsHtml = Array.from({ length: 12 }, (_, i) => {
+    const m = i + 1;
+    const item = byMonth[m] || {};
+    const tVal = item.target != null ? item.target : '';
+    const aVal = item.actual != null ? item.actual : '';
+    const noteVal = item.note || '';
+
+    let diffHtml = '-';
+    let pctHtml = '-';
+    if (tVal !== '' && aVal !== '') {
+      const diff = Number(aVal) - Number(tVal);
+      const diffSign = diff > 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2);
+      const diffClass = diff >= 0 ? 'ov-good' : 'ov-bad';
+      diffHtml = `<span class="${diffClass}">${diffSign}</span>`;
+      if (Number(tVal) !== 0) {
+        const pct = (Number(aVal) / Number(tVal)) * 100;
+        const pctColor = pct >= 100 ? '#10b981' : pct >= 80 ? '#f59e0b' : '#ef4444';
+        pctHtml = `<b>${pct.toFixed(1)}%</b><div class="ov-bar" style="height:4px;margin-top:2px"><span style="width:${Math.min(pct, 100)}%;background:${pctColor}"></span></div>`;
+      }
+    }
+
+    return `<tr data-month="${m}">
+      <td style="font-weight:600">${m}. ${ACT_MONTHS[i]}</td>
+      <td><input class="input smf-input smf-target" type="number" step="any" value="${tVal}" ${canEdit ? '' : 'disabled'} placeholder="Target"></td>
+      <td><input class="input smf-input smf-actual" type="number" step="any" value="${aVal}" ${canEdit ? '' : 'disabled'} placeholder="Actual"></td>
+      <td class="smf-diff-cell">${diffHtml}</td>
+      <td class="smf-pct-cell">${pctHtml}</td>
+      <td><input class="input smf-input smf-note" type="text" maxlength="300" value="${esc(noteVal)}" ${canEdit ? '' : 'disabled'} placeholder="หมายเหตุ..."></td>
+    </tr>`;
+  }).join('');
+
+  target.innerHTML = `<div class="view-body"><section class="card">
+    ${pageBar(a5Seg('data-smfproj', projTabs, currentProj.id), `<div class="a5-year">${a5YearSelect(me.years)}</div>`, 'smf')}
+    <div id="smf-body" style="padding-top:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <div>
+          <h3 style="margin:0;font-size:1.1rem">${esc(currentProj.name)}</h3>
+          <span class="sum-meta">ตัวชี้วัดหลัก: <strong>${esc(kpiLabel)}</strong>${esc(unitLabel)}</span>
+        </div>
+        ${canEdit ? `<div class="action-bar a5-actions" style="margin:0">
+          ${button('smf-copy-target', 'คัดลอกเป้าเดือน 1 ไปทุกเดือน', 'secondary')}
+          ${button('smf-save', 'บันทึกข้อมูล', 'primary')}
+        </div>` : ''}
+      </div>
+      <div class="table-wrap sheet">
+        <table class="mo-data-table smf-month-table">
+          <thead>
+            <tr>
+              <th style="width:120px">เดือน</th>
+              <th style="width:140px">เป้าหมาย ${esc(unitLabel)}</th>
+              <th style="width:140px">ผลงานจริง ${esc(unitLabel)}</th>
+              <th style="width:110px">ผลต่าง</th>
+              <th style="width:130px">% บรรลุ</th>
+              <th>หมายเหตุ</th>
+            </tr>
+          </thead>
+          <tbody id="smf-rows">
+            ${rowsHtml}
+          </tbody>
+          <tfoot>
+            <tr id="smf-summary" style="background:var(--bg-subtle, #f8fafc);font-weight:600">
+              <td>เฉลี่ยทั้งปี</td>
+              <td id="smf-sum-target">-</td>
+              <td id="smf-sum-actual">-</td>
+              <td id="smf-sum-diff">-</td>
+              <td id="smf-sum-pct">-</td>
+              <td id="smf-sum-info" class="sum-meta"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p class="sum-meta" style="margin-top:10px">บันทึกเป้าหมายและผลงานได้รายเดือน · ผู้ดูแล (Smart Team, ผู้ประสานงาน, สมาชิกโครงการ) สามารถบันทึกได้</p>
+    </div>
+  </section></div>`;
+
+  const rerender = () => smfTransaction(target, activity).catch(onErr);
+  target.querySelectorAll('[data-smfproj]').forEach((node) => {
+    node.onclick = () => { smfPickedProj[activity] = Number(node.dataset.smfproj); rerender(); };
+  });
+  if ($('a5-year')) $('a5-year').onchange = () => { a5Year = Number($('a5-year').value); rerender(); };
+
+  const recalc = () => {
+    let tSum = 0, tCount = 0;
+    let aSum = 0, aCount = 0;
+    const rows = target.querySelectorAll('#smf-rows tr');
+    rows.forEach((tr) => {
+      const tIn = tr.querySelector('.smf-target');
+      const aIn = tr.querySelector('.smf-actual');
+      const diffCell = tr.querySelector('.smf-diff-cell');
+      const pctCell = tr.querySelector('.smf-pct-cell');
+      const tVal = tIn.value !== '' ? Number(tIn.value) : null;
+      const aVal = aIn.value !== '' ? Number(aIn.value) : null;
+
+      if (tVal != null && !Number.isNaN(tVal)) { tSum += tVal; tCount++; }
+      if (aVal != null && !Number.isNaN(aVal)) { aSum += aVal; aCount++; }
+
+      if (tVal != null && aVal != null && !Number.isNaN(tVal) && !Number.isNaN(aVal)) {
+        const diff = aVal - tVal;
+        const diffSign = diff > 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2);
+        const diffClass = diff >= 0 ? 'ov-good' : 'ov-bad';
+        diffCell.innerHTML = `<span class="${diffClass}">${diffSign}</span>`;
+        if (tVal !== 0) {
+          const pct = (aVal / tVal) * 100;
+          const pctColor = pct >= 100 ? '#10b981' : pct >= 80 ? '#f59e0b' : '#ef4444';
+          pctCell.innerHTML = `<b>${pct.toFixed(1)}%</b><div class="ov-bar" style="height:4px;margin-top:2px"><span style="width:${Math.min(pct, 100)}%;background:${pctColor}"></span></div>`;
+        } else {
+          pctCell.innerHTML = '-';
+        }
+      } else {
+        diffCell.innerHTML = '-';
+        pctCell.innerHTML = '-';
+      }
+    });
+
+    const tAvg = tCount > 0 ? tSum / tCount : null;
+    const aAvg = aCount > 0 ? aSum / aCount : null;
+    if ($('smf-sum-target')) $('smf-sum-target').textContent = tAvg != null ? tAvg.toFixed(2) : '-';
+    if ($('smf-sum-actual')) $('smf-sum-actual').textContent = aAvg != null ? aAvg.toFixed(2) : '-';
+    if ($('smf-sum-diff')) {
+      if (tAvg != null && aAvg != null) {
+        const diff = aAvg - tAvg;
+        const diffSign = diff > 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2);
+        const diffClass = diff >= 0 ? 'ov-good' : 'ov-bad';
+        $('smf-sum-diff').innerHTML = `<span class="${diffClass}">${diffSign}</span>`;
+        if (tAvg !== 0) {
+          const pct = (aAvg / tAvg) * 100;
+          $('smf-sum-pct').innerHTML = `<b>${pct.toFixed(1)}%</b>`;
+        } else {
+          $('smf-sum-pct').textContent = '-';
+        }
+      } else {
+        $('smf-sum-diff').textContent = '-';
+        $('smf-sum-pct').textContent = '-';
+      }
+    }
+    if ($('smf-sum-info')) $('smf-sum-info').textContent = `บันทึกแล้ว ${aCount}/12 เดือน`;
+  };
+
+  recalc();
+  target.querySelector('#smf-rows').addEventListener('input', recalc);
+
+  if (canEdit && $('smf-copy-target')) {
+    $('smf-copy-target').onclick = () => {
+      const firstTarget = target.querySelector('#smf-rows tr[data-month="1"] .smf-target').value;
+      if (firstTarget === '') {
+        toast('กรุณากรอกเป้าหมายเดือนที่ 1 ก่อน', 'warn');
+        return;
+      }
+      target.querySelectorAll('#smf-rows tr').forEach((tr, idx) => {
+        if (idx > 0) tr.querySelector('.smf-target').value = firstTarget;
+      });
+      recalc();
+      toast('คัดลอกเป้าหมายไปทุกเดือนแล้ว');
+    };
+  }
+
+  if (canEdit && $('smf-save')) {
+    $('smf-save').onclick = async () => {
+      const months = [];
+      target.querySelectorAll('#smf-rows tr').forEach((tr) => {
+        const month = Number(tr.dataset.month);
+        const tVal = tr.querySelector('.smf-target').value;
+        const aVal = tr.querySelector('.smf-actual').value;
+        const note = tr.querySelector('.smf-note').value;
+        months.push({
+          month,
+          target: tVal !== '' ? Number(tVal) : null,
+          actual: aVal !== '' ? Number(aVal) : null,
+          note: note || null
+        });
+      });
+      try {
+        $('smf-save').disabled = true;
+        await a5Api(activity, 'project-months', {
+          method: 'PUT',
+          body: { year: a5Year, projectId: currentProj.id, months }
+        });
+        toast('บันทึกเป้าหมายและผลงานสำเร็จ');
+        rerender();
+      } catch (err) {
+        onErr(err);
+      } finally {
+        if ($('smf-save')) $('smf-save').disabled = false;
+      }
+    };
+  }
+}
+
 for (const id of APL_ON) {
   VIEWS[`${id}-home`] = (target) => aplDashboard(target, id);
   VIEWS[`${id}-setting`] = (target) => aplSetting(target, id);
 }
+VIEWS['smf-edit'] = (target) => smfTransaction(target, 'smf');
 
 
 // SMF Dashboard > ภาพรวม: only SMF and its projects of the year (ผู้ใช้กำหนด 2026-11-01) · one card per project with
-// plan progress, status of its main items, late items and team.
+// plan progress, status of its main items, late items, team, and monthly Target vs Actual KPI.
 async function aplDrawSmfOverview(body, activity) {
-  const data = await api(`/api/act/overview?year=${a5Year}`);
+  let data;
+  let pmData = { months: [] };
+  try {
+    [data, pmData] = await Promise.all([
+      api(`/api/act/overview?year=${a5Year}`),
+      a5Api(activity, `project-months?year=${a5Year}`).catch(() => ({ months: [] }))
+    ]);
+  } catch (err) {
+    body.innerHTML = `<p class="empty">${esc(err.message)}</p>`;
+    return;
+  }
   const p = data.projects.find((x) => x.activity === activity) || {};
   const projects = (p.projects || []).filter((u) => u.status === 'Active');
   const unassigned = p.plan ? p.plan.items - projects.reduce((s, u) => s + (p.plan.byUnit?.[u.code]?.items || 0), 0) : 0;
@@ -666,6 +913,29 @@ async function aplDrawSmfOverview(body, activity) {
     chartKpi({ label: 'คนในทีม', value: ovNum(p.team?.people), unit: 'คน', icon: 'groups', note: `คณะกรรมการ ${ovNum(p.team?.committee)} · Smart Team ${ovNum(p.team?.smart)}`, color: CHART.series[3] })
   ].join('');
   const row = (label, value) => `<div class="ov-row"><span>${label}</span><b>${value}</b></div>`;
+
+  const kpiSection = (u) => {
+    const list = (pmData.months || []).filter((m) => m.project_id === u.id);
+    const withActual = list.filter((m) => m.actual != null).sort((a, b) => b.month - a.month);
+    const kpiName = u.target_name ? `${u.target_name} (${u.unit || ''})` : `เป้าหมาย (${u.unit || ''})`;
+    if (!withActual.length) {
+      return `<div class="ov-sec"><div class="ov-sec-title">เป้าหมายและผลงาน (KPI)</div><p class="sum-meta">ตัวชี้วัด: ${esc(kpiName)} · ยังไม่มีผลงานบันทึก</p></div>`;
+    }
+    const latest = withActual[0];
+    const mName = ACT_MONTHS[latest.month - 1] || `เดือน ${latest.month}`;
+    const diff = latest.target != null ? latest.actual - latest.target : null;
+    const diffText = diff != null ? (diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2)) : '-';
+    const diffClass = diff != null ? (diff >= 0 ? 'ov-good' : 'ov-bad') : '';
+    const pct = latest.target != null && latest.target > 0 ? ((latest.actual / latest.target) * 100).toFixed(1) : null;
+    return `<div class="ov-sec"><div class="ov-sec-title">ผลงานล่าสุด: ${mName} (${esc(kpiName)})</div>
+      ${row('ผลงานจริง', `${latest.actual} ${esc(u.unit || '')}`)}
+      ${row('เป้าหมาย', latest.target != null ? `${latest.target} ${esc(u.unit || '')}` : '-')}
+      ${diff != null ? row('ผลต่าง', `<span class="${diffClass}">${diffText}</span>`) : ''}
+      ${pct != null ? row('% บรรลุ', `<b>${pct}%</b>`) : ''}
+      <div style="margin-top:6px">${button('', 'บันทึก / ดูรายเดือน', 'secondary small', `data-ov-go="smf-edit"`)}</div>
+    </div>`;
+  };
+
   const card = (u, i) => {
     const plan = p.plan?.byUnit?.[u.code];
     const chips = plan ? OV_PLAN.filter(([code]) => plan.counts[code]).map(([code, label]) => `<span class="ov-chip is-${code}">${label} ${plan.counts[code]}</span>`).join('') : '';
@@ -673,12 +943,14 @@ async function aplDrawSmfOverview(body, activity) {
     return `<article class="card ov-card" style="--ov:${CHART.series[i % CHART.series.length]}">
       <div class="ov-head"><strong>${esc(u.name)}</strong></div>
       <div class="ov-sec"><div class="ov-sec-title">ความคืบหน้าแผนงาน</div>${plan ? `<div class="ov-progress"><div class="ov-bar"><span style="width:${plan.percent}%"></span></div><b>${plan.percent}%</b></div><div class="ov-chips">${chips}</div>` : '<p class="sum-meta">ยังไม่มีหัวข้อแผน (Setting > แผนงาน เลือกโครงการนี้)</p>'}</div>
+      ${kpiSection(u)}
       <div class="ov-sec"><div class="ov-sec-title">สรุป</div>${row('หัวข้อหลัก', ovNum(plan?.items))}${row('เลยกำหนด', `<span class="${plan?.overdue ? 'ov-bad' : ''}">${ovNum(plan?.overdue)}</span>`)}${row('ทีมโครงการ', `${ovNum(p.team?.units?.[u.code])} คน`)}${late}</div>
     </article>`;
   };
   body.innerHTML = `<div class="ch-kpis">${kpis}</div>
     <div class="ov-grid">${projects.map(card).join('') || `<p class="empty">ยังไม่มีโครงการปี ${a5Year} · เพิ่มที่ Setting > โครงการ</p>`}</div>
     <p class="sum-meta">${unassigned > 0 ? `หัวข้อที่ยังไม่ระบุโครงการ ${unassigned} หัวข้อ · ` : ''}ข้อมูล ณ ${actShort(data.today)} ${data.year} · ภาพรวมทุกกิจกรรม (5S · CFO · SMF) อยู่ที่หน้าหลัก</p>`;
+  body.querySelectorAll('[data-ov-go]').forEach((node) => { node.onclick = () => openView(node.dataset.ovGo); });
   a5Lift(body);
 }
 

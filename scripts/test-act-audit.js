@@ -30,6 +30,10 @@ ok(fs.readFileSync(path.join(ROOT, 'db', 'act', 'smf.sql'), 'utf8') === actSql('
   ok(await throws(smf, `insert into mt_smf_project (year, code, name) values (2027, 'Smart OEE', 'x')`), 'code is a–z 0–9 - _');
   await smf.exec(`insert into mt_smf_team (year, employee_id, role, unit) values (2026, '1', 'chairman', 'oee'), (2026, '2', 'member', 'vision')`);
   await smf.exec(`insert into mt_smf_task (year, title, unit, created_by) values (2026, 'OEE dashboard', 'oee', '1')`);
+  const oeeId = (await smf.query(`select id from mt_smf_project where year = 2026 and code = 'oee'`)).rows[0].id;
+  await smf.exec(`insert into tx_smf_project_month (year, project_id, month, target, actual, note) values (2026, ${oeeId}, 1, 80, 85.5, 'ดีขึ้น')`);
+  ok(await throws(smf, `insert into tx_smf_project_month (year, project_id, month, target) values (2026, ${oeeId}, 1, 85)`), 'one row per project and month');
+  ok(await throws(smf, `insert into tx_smf_project_month (year, project_id, month, target) values (2026, ${oeeId}, 13, 85)`), 'month between 1 and 12');
   ok(true, 'project team (chairman, member without department) and a main plan item of a project');
   await smf.close();
 }

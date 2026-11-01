@@ -2,11 +2,11 @@
 
 ## กำลังทำอยู่
 
-(ว่าง)
+(ไม่มี)
 
 ## SQL ที่รอผู้ใช้รัน
 
-- [SMF] `db/act/smf.sql` (หรือ `db/setup.sql`) ใน activity01: ตาราง `mt_smf_project` + 3 โครงการ 2026 และคอลัมน์ `unit` ของแผนงาน
+- [SMF] `db/act/smf.sql` (หรือ `db/setup.sql`) ใน Tx Data (activity01): ตาราง `mt_smf_team`, `mt_smf_setting`, `mt_smf_task`, `mt_smf_project` (พร้อม `target_name`, `unit`), และตาราง `tx_smf_project_month` (เป้าหมายและผลงานรายเดือน)
 
 - `db/act/cfo.sql` ใน Supabase activity01 (5S + ตารางกลางรันแล้ว) · ฐานว่างใหม่ใช้ `db/setup.sql` ไฟล์เดียว
 
@@ -17,6 +17,8 @@
 - ข้อมูลเดิมจาก TSAT4 SMF (พนักงาน, ผลตรวจ 5S, CFO) ยังไม่ได้ย้ายมา · มีไฟล์นำเข้า `inbox/import_5s.sql`, `inbox/import_cfo.sql` (ไม่อยู่ใน git) ทดสอบแล้วใน test:act
 
 ## บันทึก (อันใหม่อยู่บนสุด)
+
+- 2026-11-01 · Antigravity [SMF] · เพิ่มระบบบันทึกเป้าหมาย (target) และผลงาน (actual) รายเดือนของโครงการ SMF: ตาราง `tx_smf_project_month` (project_id, month 1..12, target, actual, note) · API GET/PUT `/api/act/:activity/project-months` · หน้า Transaction (`smf-edit`) ตาราง 12 เดือนคำนวณผลต่างและ % บรรลุแบบเรียลไทม์ พร้อมปุ่มคัดลอกเป้าหมายเดือนที่ 1 ไปทุกเดือน · Setting > โครงการ กำหนด KPI และหน่วยได้ · Dashboard แสดงผลงาน KPI ล่าสุดต่อโครงการ · **ผู้ใช้ต้องรัน db/act/smf.sql ใน Tx Data**
 
 - 2026-11-01 · Claude [5S] · CFO Setting > Emission Factor แยก 5 ตาราง: EF ที่ใช้คำนวณ · GWP (เพิ่ม/แก้/ลบ) · EF พลังงาน · GWP สารเคมี · EF IPCC (`mt_cfo_ef_ref` + seed 204 แถวจากแผ่น EF TGO AR5 V2) · ผู้ใช้ต้องรัน db/act/cfo.sql แล้ว db/act/cfo_ef_ref_seed.sql
 - 2026-11-01 · Claude [5S] · เพิ่มตาราง คุณสมบัติเชื้อเพลิง (sheet fuel: Heating value / Density / Conversion Factor 30 แถว) · ตัดหน้า EF ที่ใช้คำนวณออกตามผู้ใช้ · ต้องรัน db/act/cfo.sql + cfo_ef_ref_seed.sql อีกครั้ง
