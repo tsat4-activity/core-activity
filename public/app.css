@@ -488,7 +488,7 @@ body[data-zone] .plan-col.is-today{border-color:var(--zone)}
 .page-bar-left{flex-wrap:nowrap}
 .page-bar-right{margin-left:auto;justify-content:flex-end}
 .page-bar-slot{display:contents}
-.page-bar .field{width:auto;flex:0 1 auto;min-width:0;max-width:260px;flex-direction:row;align-items:center;gap:6px;white-space:nowrap}.page-bar .field > select,.page-bar .field > input{min-width:84px;max-width:190px}
+.page-bar .field{width:auto;flex:0 0 auto;min-width:0;max-width:260px;flex-direction:row;align-items:center;gap:6px;white-space:nowrap}.page-bar .field > select,.page-bar .field > input{min-width:84px;max-width:190px}
 .page-bar .field select{padding-right:22px}
 .page-bar .search-slot{flex:0 1 200px;min-width:150px;width:auto}
 .page-bar .search-slot .btn{padding:0 8px}
@@ -717,7 +717,7 @@ td.cfo-ref{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:no
 .cfo-reftab thead{position:sticky;top:0;z-index:5}.cfo-reftab thead th{position:static;height:auto;padding:4px 8px;text-align:center;white-space:nowrap}
 .cfo-reftab thead th.cfo-unit{font-size:11px;font-weight:500}
 .cfo-reftab .cfo-band td{background:color-mix(in srgb,var(--mo-primary) 10%,transparent);font-weight:700}
-.cfo-reftab .cfo-head{font-weight:600}.cfo-reftab .cfo-child{padding-left:26px}.cfo-reftab tr.is-muted td{opacity:.55}
+.cfo-reftab td.cfo-name{max-width:280px}.cfo-reftab .cfo-head{font-weight:600}.cfo-reftab .cfo-child{padding-left:26px}.cfo-reftab tr.is-muted td{opacity:.55}
 .cfo-inv .cfo-group td{background:var(--mo-surface-2);font-weight:600}.cfo-inv .cfo-sub-total td{font-weight:600;background:color-mix(in srgb,var(--mo-text-muted) 7%,var(--mo-surface))}
 .cfo-inv .cfo-total td{font-weight:600;background:color-mix(in srgb,var(--mo-text-muted) 14%,var(--mo-surface))}
 #cfo-rev-rows table{width:100%}.cfo-rev-detail{white-space:normal;min-width:260px;max-width:520px;line-height:1.35;padding-top:4px;padding-bottom:4px}

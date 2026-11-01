@@ -52,6 +52,8 @@ const cfoDash = { department: '', chartScope: '', scope: '1', page: '1' };
 // transaction filters: Scope → month (one month, or '' = the year) → category (main) → activity (sub)
 const cfoTx = { scope: '1', month: String(new Date().getMonth() + 1), category: '', activity: '' };
 const cfoHeads = { entries: { sort: '', dir: 'asc', filters: {} }, activities: { sort: '', dir: 'asc', filters: {} }, ef: { sort: '', dir: 'asc', filters: {} } };
+// reference tables: 5 decimals like the user asked (ผู้ใช้กำหนด 2026-11-01) · the full value is in the cell's tooltip
+const cfoRefNum = (v) => (v == null || v === '' ? '' : Number(v).toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 }));
 // small EF values (1.02e-6) stay readable: exponent below 0.001, else up to 6 decimals like the sheet
 const cfoEfNum = (v) => (v == null || v === '' ? '' : Number(v) === 0 ? '0' : Math.abs(v) < 0.001 ? Number(v).toExponential(3) : Number(v).toLocaleString('en-US', { maximumFractionDigits: 6 }));
 
@@ -933,8 +935,11 @@ function cfoSetRef(body, m, rerender, sheet) {
       const heading = !r.unit && r.total == null && r.co2 == null;
       const child = /^-\s/.test(r.name);
       const cell = ([key, , , num]) => {
-        if (num) return `<td class="num">${cfoEfNum(r[key])}</td>`;
-        if (key === 'name') return `<td class="${heading ? 'cfo-head' : ''}${child ? ' cfo-child' : ''}">${esc(child ? r.name.replace(/^-\s*/, '') : r.name)}${r.ratio != null ? ` <span class="sum-meta">(สัดส่วน ${cfoEfNum(r.ratio)})</span>` : ''}</td>`;
+        if (num) return `<td class="num"${r[key] == null ? '' : ` title="${esc(r[key])}"`}>${cfoRefNum(r[key])}</td>`;
+        if (key === 'name') {
+          const name = `${child ? r.name.replace(/^-\s*/, '') : r.name}${r.ratio != null ? ` (สัดส่วน ${cfoEfNum(r.ratio)})` : ''}`;
+          return `<td class="cfo-ref cfo-name${heading ? ' cfo-head' : ''}${child ? ' cfo-child' : ''}" title="${esc(name)}">${esc(name)}</td>`;
+        }
         if (key === 'reference' || key === 'remark') return `<td class="cfo-ref" title="${esc(r[key] || '')}">${esc(r[key] || '')}</td>`;
         return `<td>${esc(r[key] || '')}</td>`;
       };
