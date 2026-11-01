@@ -16,6 +16,8 @@
 
 ## บันทึก (อันใหม่อยู่บนสุด)
 
+- 2026-11-01 · Claude · แยกงานให้หลาย AI: `Activity\5S` (branch main) + `Activity\SMF` (git worktree branch smf, inbox = junction ไป 5S) · ตารางว่าใครดูแลไฟล์ไหนอยู่ใน AGENTS.md หัวข้อ 0.1 · `Activity\CFO` เป็นสำเนา CFO แยกเดิม (repo อื่น) ผู้ใช้ให้คงไว้
+
 - 2026-11-01 · Claude · SMF Dashboard แท็บแรก **ภาพรวม** ของโครงการหลัก 5S · CFO · SMF (SMF = Smart Factory ดูแลภาพรวม): KPI รวม + การ์ดต่อโครงการ = ความคืบหน้าแผน (สถานะหัวข้อหลัก) · ผลลัพธ์หลัก (5S คะแนน/ใบตรวจ/Self ค้าง · CFO tCO₂e เทียบปีก่อนเดือนเดียวกัน+เป้า) · ทีม · ปัญหา (Issue / แผนเลยกำหนด) · API `GET /api/act/overview` (server/modules/act/overview.js) อ่านอย่างเดียว ตารางที่ยังไม่สร้าง = ส่วนนั้นว่าง
 
 - 2026-10-30 · Claude · ทีม (5S / CFO / SMF ใช้ a5SetTeam ร่วมกัน) เพิ่มปุ่มแก้ไข: เปลี่ยนทีม บทบาท กลุ่มตรวจ พื้นที่ หน่วยงาน สถานะ (PATCH /team/:id ตรวจแบบเดียวกับเพิ่ม `placementOf`) · ตรวจทุกหน้าแล้ว หน้าอื่นมี เพิ่ม/แก้ไข/ลบ ครบ · กฎใหม่ใน AGENTS.md

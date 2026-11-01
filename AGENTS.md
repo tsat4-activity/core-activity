@@ -1,6 +1,6 @@
-# กฎสำหรับ AI ทุกตัวในโปรเจกต์นี้ (TSAT4 Activity: 5S + CFO)
+# กฎสำหรับ AI ทุกตัวในโปรเจกต์นี้ (TSAT4 Activity: 5S + CFO + SMF)
 
-TSAT4 Activity = ระบบกิจกรรม 5S และ CFO เว็บเดียว แยกออกมาจาก TSAT4 SMF (2026-10-30) มี GitHub (tsat4-activity/core-activity), Render และ **Supabase ของตัวเอง**
+TSAT4 Activity = ระบบกิจกรรม 5S · CFO · SMF เว็บเดียว แยกออกมาจาก TSAT4 SMF (2026-10-30) มี GitHub (tsat4-activity/core-activity), Render และ **Supabase ของตัวเอง**
 **ระบบที่ deploy อยู่ต้องไม่พัง** ทุกตัวจึงต้องทำตามกฎนี้ทุกครั้ง
 
 ## 0. ขอบเขต
@@ -12,12 +12,31 @@ TSAT4 Activity = ระบบกิจกรรม 5S และ CFO เว็บ
 - ไม่ผูกกับ TSAT4 SMF แล้ว: ข้อมูลไม่ใช้ร่วมกัน · ถ้าจะรับ-ส่งข้อมูลกับระบบอื่นให้ทำตามมาตรฐานร่วม (view `share_*` + คีย์อ่านอย่างเดียว)
 - deploy: push ขึ้น `main` → Render deploy อัตโนมัติ
 
+## 0.1 หลาย AI ทำงานพร้อมกัน (ผู้ใช้จัดโฟลเดอร์ 2026-11-01)
+
+เว็บเดียว repo เดียว (`tsat4-activity/core-activity`) แต่ละ AI ทำงาน **คนละโฟลเดอร์** (git worktree คนละ branch) แล้วส่งขึ้น `main` ตัวเดียวกัน
+ดูว่าตัวเองอยู่โฟลเดอร์ไหนด้วย `git rev-parse --show-toplevel` แล้วทำเฉพาะงานของโฟลเดอร์นั้น
+
+| โฟลเดอร์ | branch | ดูแลหลัก (แก้ได้เต็มที่) |
+|---|---|---|
+| `C:\Work\projects\Activity\5S` | `main` | 5S: `public/js/act-5s.js`, `public/js/act-tx.js`, `server/modules/act/audit.js`, `server/modules/act/transaction.js`, `db/act/5s*.sql`, `docs/specs/act-5s.md` · งาน CFO ของเว็บนี้ทำที่นี่ด้วย (`act-cfo.js`, `cfo.js`, `db/act/cfo.sql`) |
+| `C:\Work\projects\Activity\SMF` | `smf` | SMF + ภาพรวม: `public/js/act-planner.js`, `server/modules/act/planner.js`, `server/modules/act/overview.js`, `db/act/smf.sql`, `docs/specs/act-smf.md`, `docs/specs/act-planner.md` |
+| `C:\Work\projects\Activity\CFO` | (repo อื่น) | สำเนา CFO แยกเดิม ไม่ใช่เว็บนี้ ไม่มี GitHub · **ห้ามคัดลอกโค้ดจากที่นั่นทับเว็บนี้** |
+
+- **ไฟล์กลาง** แตะได้ทุกตัวแต่แก้เท่าที่จำเป็นและ commit ให้เร็ว: `public/js/core.js`, `public/js/act.js`, `public/js/system.js`, `public/js/units.js`, `public/app.css`, `public/index.html`, `server/core/*`, `server/modules/act/common.js`, `server/modules/act/index.js`, `server/modules/system/*`, `scripts/*`, `db/00_main.sql`, `db/setup.sql`, `docs/*` (HANDOFF / AGENTS / ARCHITECTURE)
+- **เริ่มงาน:** `git pull --rebase origin main` (branch `smf` ตั้ง upstream เป็น `origin/main` แล้ว `git pull --rebase` ได้เลย)
+- **deploy:** `git pull --rebase origin main && npm run check && npm run test:act && git push origin HEAD:main` · ถ้า rebase ชนในไฟล์กลาง แก้ให้เหลือทั้งสองฝั่งแล้ว `git rebase --continue` ห้ามทิ้งงานของอีกตัว
+- **ห้าม** แก้ / commit ไฟล์ที่อีกโฟลเดอร์ทำค้างอยู่ · ห้าม `git stash` (stash ใช้ร่วมกันทุก worktree)
+- **HANDOFF "กำลังทำอยู่"** ขึ้นต้นบรรทัดด้วยชื่อโฟลเดอร์ เช่น `[SMF] ...` จะได้ไม่ทับกัน
+- `inbox/` (ไม่อยู่ใน git) มีจริงที่ `5S\inbox` · `SMF\inbox` เป็นลิงก์ (junction) ไปที่เดียวกัน · `node_modules` แยกต่อโฟลเดอร์ (`npm install` เองเมื่อ package-lock เปลี่ยน)
+- เพิ่มโฟลเดอร์ใหม่ให้ AI อีกตัว: ใน `5S` รัน `git worktree add ..\<ชื่อ> -b <branch> origin/main` → `git -C ..\<ชื่อ> branch --set-upstream-to=origin/main` → `npm install` ในโฟลเดอร์ใหม่ → `mklink /J <ชื่อ>\inbox 5S\inbox` → เพิ่มแถวในตารางด้านบน
+
 ## 1. ก่อนเริ่มงาน (ทำทุกครั้ง ทุก session)
 
 1. `git status` ถ้ามีไฟล์ที่ถูกแก้แต่ยังไม่ commit และไม่ใช่งานของคุณ แปลว่าเป็นงานค้างของ AI ตัวก่อน
    - **ห้าม** `git checkout -- .`, `git reset --hard`, `git stash`, `git clean` หรือลบไฟล์เหล่านั้น
    - อ่านหัวข้อ "กำลังทำอยู่" ใน `docs/HANDOFF.md` แล้วทำต่อให้เสร็จ หรือถามผู้ใช้ก่อน
-2. ถ้าไม่มีงานค้าง ให้รัน `git pull --rebase` เพื่อดึงโค้ดล่าสุด
+2. ถ้าไม่มีงานค้าง ให้รัน `git pull --rebase origin main` เพื่อดึงโค้ดล่าสุด
 3. อ่าน `docs/HANDOFF.md` ให้จบ ไฟล์นี้บอกสถานะล่าสุด งานค้าง และสิ่งที่ห้ามแตะ
 4. อ่าน `docs/ARCHITECTURE.md` ในส่วนที่จะแก้
 5. ถ้า `package-lock.json` เปลี่ยน ให้รัน `npm install` แล้วตามด้วย `npm run check` ต้องผ่านก่อนเริ่มแก้ ถ้าไม่ผ่านตั้งแต่ต้น ให้แจ้งผู้ใช้
@@ -110,7 +129,7 @@ TSAT4 Activity = ระบบกิจกรรม 5S และ CFO เว็บ
    - ถ้าตั้งใจเพิ่ม/เปลี่ยน route หรือสิทธิ์ ให้รัน `npm run check -- --update` แล้วตรวจ diff ของ `scripts/routes.snapshot.txt` ว่าเปลี่ยนเฉพาะที่ตั้งใจ
 2. อัปเดต `docs/HANDOFF.md`: เพิ่มบรรทัดใน "บันทึก" (อันใหม่อยู่บนสุด) และล้างหรือแก้หัวข้อ "กำลังทำอยู่"
 3. commit message เป็นประโยคภาษาอังกฤษประโยคเดียว จบด้วยจุด บอกผลลัพธ์ที่ได้ เช่น `Add the 5S ranking export.`
-4. `git pull --rebase` อีกครั้ง (อีกตัวอาจ push ไปแล้ว) ให้ `npm run check` ผ่านอีกรอบ แล้ว `git push origin main` **Render จะ deploy อัตโนมัติ**
+4. `git pull --rebase origin main` อีกครั้ง (อีกตัวอาจ push ไปแล้ว) ให้ `npm run check` ผ่านอีกรอบ แล้ว `git push origin HEAD:main` **Render จะ deploy อัตโนมัติ**
 5. ประมาณ 2–5 นาทีต่อมา ตรวจ `https://<ชื่อ service บน Render>.onrender.com/api/health` ต้องได้ `{"ok":true,"database":true}`
 
 **ห้าม push ถ้า check ไม่ผ่าน** ถ้า limit ใกล้หมดและงานยังไม่เสร็จ ให้ปล่อยไฟล์ไว้แบบยังไม่ commit (AI ตัวถัดไปจะเห็นในโฟลเดอร์เดียวกัน) แล้วเขียนหัวข้อ "กำลังทำอยู่" ใน HANDOFF ให้ละเอียดว่าทำถึงไหน เหลืออะไร และไฟล์ไหนยังไม่เสร็จ
