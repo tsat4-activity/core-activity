@@ -4,6 +4,8 @@ DELETE /api/act/:activity/cfo/activities/:id auth
 DELETE /api/act/:activity/cfo/ef/:id auth
 DELETE /api/act/:activity/cfo/entries/:id auth
 DELETE /api/act/:activity/cfo/gwp/:code auth
+DELETE /api/act/:activity/cfo/material-usage/:month auth
+DELETE /api/act/:activity/cfo/materials/:material auth
 DELETE /api/act/:activity/cfo/ref/:id auth
 DELETE /api/act/:activity/checklist/:id auth
 DELETE /api/act/:activity/projects/:id auth
@@ -17,6 +19,7 @@ GET /api/act/:activity/audits auth
 GET /api/act/:activity/audits/:id auth
 GET /api/act/:activity/cfo/inventory auth
 GET /api/act/:activity/cfo/master auth
+GET /api/act/:activity/cfo/materials auth
 GET /api/act/:activity/cfo/progress auth
 GET /api/act/:activity/cfo/revisions auth
 GET /api/act/:activity/cfo/s3 auth
@@ -44,6 +47,7 @@ PATCH /api/act/:activity/audits/:id auth
 PATCH /api/act/:activity/cfo/activities/:id auth
 PATCH /api/act/:activity/cfo/ef/:id auth
 PATCH /api/act/:activity/cfo/gwp/:code auth
+PATCH /api/act/:activity/cfo/materials/:material auth
 PATCH /api/act/:activity/cfo/ref/:id auth
 PATCH /api/act/:activity/checklist/:id auth
 PATCH /api/act/:activity/issues/:id auth
@@ -58,6 +62,8 @@ POST /api/act/:activity/cfo/activities auth
 POST /api/act/:activity/cfo/confirm auth
 POST /api/act/:activity/cfo/ef auth
 POST /api/act/:activity/cfo/gwp auth
+POST /api/act/:activity/cfo/material-usage auth
+POST /api/act/:activity/cfo/materials auth
 POST /api/act/:activity/cfo/photo auth
 POST /api/act/:activity/cfo/ref auth
 POST /api/act/:activity/cfo/revisions auth

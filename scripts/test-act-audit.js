@@ -300,6 +300,15 @@ if (!fs.existsSync(cfoFile)) {
     (select round(qty * 0.5 / 1000, 6)::float from tx_cfo_entry where ef3_id is not null) want, (select scope_code from v_cfo_entry where part = 'upstream') code`);
   await db.exec('rollback');
   ok(Math.abs(up.s1 - 188.863) < 0.01 && up.t3 === up.want && up.code === '3-3', `the 3-3 line uses the entry quantity × its EF (${up.t3}) and Scope 1 stays ${up.s1}`);
+  // วัสดุ (SAP): usage rows join v_cfo_entry as Scope 3 (qty in EF units) and v_cfo_month counts them; Scope 1 untouched.
+  await db.exec(`begin; insert into mt_cfo_material (material, name, sap_unit, factor) values ('700001', 'A4 80g', 'REAM', 2.495);
+    insert into tx_cfo_material (month, department, material, name, qty, unit, factor, source, ef_unit, kgco2e, scope_code, tco2e, uploaded_by)
+    values ('2026-10-01', 'QSM', '700001', 'A4 80g', 100, 'REAM', 2.495, 'Paper', 'kg', 1.2, '3-1', 0.2994, 't')`);
+  const mat = await one(db, `select (select round(sum(tco2e), 3)::float from v_cfo_month where scope = 1) s1, (select qty::float from v_cfo_entry where part = 'material') qty,
+    (select tco2e::float from v_cfo_month where scope = 3 and month = '2026-10-01') s3`);
+  await db.exec('rollback');
+  ok(Math.abs(mat.s1 - 188.863) < 0.01 && mat.qty === 249.5 && mat.s3 >= 0.2994, `SAP material usage counts in Scope 3 (${mat.qty} kg, ${mat.s3} tCO2e)`);
+  ok(await throws(db, `insert into mt_cfo_material (material, name, scope_code) values ('x', 'x', '1-1')`), 'a material belongs to a Scope 3 category');
   ok(await throws(db, `insert into mt_cfo_s3_assess (year, scope_code) values (2026, '1-1')`), 'Fr-03.2 rows are Scope 3 categories only');
   {
     // Fr-03.2 criteria were ✓ / × (boolean) and are now % scores: ✓ = 1.00, × = 0, and the file runs again cleanly
