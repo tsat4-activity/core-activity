@@ -86,8 +86,9 @@ function input(body, year, hasKids, units = []) {
     owner_id: String(body.ownerId || '').trim().slice(0, 40) || null,
     note: String(body.note || '').trim().slice(0, 2000) || null,
     color: parentId == null && COLORS.includes(body.color) ? body.color : null,
-    // โครงการ (SMF) belongs to the main item; sub items follow their main item
-    unit: parentId == null && units.includes(body.unit) ? body.unit : null
+    // โครงการ (SMF) belongs to the main item; sub items follow their main item · only activities with projects write
+    // the column, so the others keep working before db/act/<act>.sql adds it
+    ...(units.length ? { unit: parentId == null && units.includes(body.unit) ? body.unit : null } : {})
   };
   if (parentId == null && body.unit && !units.includes(body.unit)) return { error: 'โครงการไม่ถูกต้อง' };
   if (hasKids) return { row };
