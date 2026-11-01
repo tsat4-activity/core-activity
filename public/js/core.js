@@ -697,8 +697,9 @@ const DASH_ROW_MAX = 44;
   new MutationObserver((list) => { if (list.some((m) => !m.target.closest?.('.ch-tip'))) later(); }).observe(view, { childList: true, subtree: true });
 })();
 
-// Text cut off with … shows in full on hover (ผู้ใช้กำหนด 2026-10-29): one floating box for the whole app, next to the
-// cut-off text. Elements with their own title keep the browser's tooltip.
+// Text cut off with … shows in full on hover (ผู้ใช้กำหนด 2026-10-29, ย้ำ 2026-11-01): one floating box for the whole app,
+// next to the cut-off text, at once. A cut-off element's title becomes the box text (the browser's slow tooltip is
+// turned off for it); an element that is not cut off keeps its own title.
 const OVERFLOW_TIP = (() => {
   if (!window.matchMedia('(hover: hover)').matches) return null;
   const tip = document.createElement('div');
@@ -708,10 +709,11 @@ const OVERFLOW_TIP = (() => {
   let shown = null;
   const clipped = (el) => {
     for (let node = el, k = 0; node && k < 4 && node !== document.body; node = node.parentElement, k += 1) {
-      if (node.title || node.matches('input, select, textarea, .ov-tip')) return null;
+      if (node.matches('input, select, textarea, .ov-tip')) return null;
       const style = getComputedStyle(node);
       const oneLine = style.textOverflow === 'ellipsis' || (style.overflow === 'hidden' && style.whiteSpace === 'nowrap');
       if (oneLine && node.scrollWidth > node.clientWidth + 1 && node.textContent.trim() && node.textContent.length < 400) return node;
+      if (node.title) return null;
     }
     return null;
   };
@@ -721,7 +723,8 @@ const OVERFLOW_TIP = (() => {
     shown = node;
     tip.hidden = !node;
     if (!node) return;
-    tip.textContent = node.textContent.trim().replace(/\s+/g, ' ').slice(0, 500);
+    if (node.title) { node.dataset.tip = node.title; node.removeAttribute('title'); }
+    tip.textContent = (node.dataset.tip || node.textContent).trim().replace(/\s+/g, ' ').slice(0, 500);
     const r = node.getBoundingClientRect();
     tip.style.left = `${Math.max(8, Math.min(r.left, innerWidth - tip.offsetWidth - 8))}px`;
     tip.style.top = `${r.bottom + 4 + tip.offsetHeight > innerHeight ? r.top - tip.offsetHeight - 4 : r.bottom + 4}px`;

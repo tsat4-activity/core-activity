@@ -46,7 +46,7 @@ const CFO_REF_COLS = {
   ipcc: { title: 'GHG Emission Factors from IPCC Guidelines', cols: [['name', 'Emission Source'], ['co2', 'CO₂', '(kgCO₂/TJ)', 1], ['ch4_fossil', 'Fossil CH₄', '(kgCH₄/TJ)', 1], ['ch4', 'CH₄', '(kgCH₄/TJ)', 1],
     ['n2o', 'N₂O', '(kgN₂O/TJ)', 1], ['total', 'Total', '(kgCO₂-eq/TJ)', 1], ['reference', 'Emission Reference']] }
 };
-const cfoFilter = { scope: '', department: '', q: '', status: '', group: '' };
+const cfoFilter = { scope: '', department: '', q: '', status: '' };
 // page: Summary หน้า 1 (monthly accumulation) / หน้า 2 (summary by Scope), picked in the dropdown before the year
 const cfoDash = { department: '', chartScope: '', scope: '1', page: '1' };
 // transaction filters: Scope → month (one month, or '' = the year) → category (main) → activity (sub)
@@ -62,10 +62,10 @@ const cfoPct = (part, total) => (total ? `${Math.round((part / total) * 1000) / 
 const cfoMonthIso = (m) => `${a5Year}-${String(m).padStart(2, '0')}`;
 
 // Page frame shared by the three CFO pages: tabs on the left, year (+ extra) on the right, body below.
-async function cfoFrame(target, tabs, attr, active, rightExtra = '') {
+async function cfoFrame(target, tabs, attr, active, rightExtra = '', { year = true } = {}) {
   const me = await a5Api(CFO, `me?year=${a5Year}`);
   target.innerHTML = `<div class="view-body"><section class="card">
-    ${pageBar(tabs ? a5Seg(attr, tabs, active) : '', `<div class="a5-year">${a5YearSelect(me.years)}</div>${rightExtra}`, 'a5')}
+    ${pageBar(tabs ? a5Seg(attr, tabs, active) : '', `${year ? `<div class="a5-year">${a5YearSelect(me.years)}</div>` : ''}${rightExtra}`, 'a5')}
     <div id="a5-body"><div class="empty">กำลังโหลด...</div></div>
   </section></div>`;
   return { me, body: $('a5-body') };
@@ -715,10 +715,11 @@ function cfoEntryForm(row, septic, month, reload) {
 // ---------- Setting ----------
 
 async function cfoSetting(target) {
-  const { me, body } = await cfoFrame(target, CFO_SET_TABS, 'data-cfoset', cfoSetTab);
+  // Emission Factor is master data for every year, so its tab has no year (ผู้ใช้กำหนด 2026-11-01)
+  const { me, body } = await cfoFrame(target, CFO_SET_TABS, 'data-cfoset', cfoSetTab, '', { year: cfoSetTab !== 'ef' });
   const rerender = () => cfoSetting(target).catch(onErr);
   target.querySelectorAll('[data-cfoset]').forEach((node) => { node.onclick = () => { cfoSetTab = node.dataset.cfoset; rerender(); }; });
-  $('a5-year').onchange = () => { a5Year = Number($('a5-year').value); rerender(); };
+  if ($('a5-year')) $('a5-year').onchange = () => { a5Year = Number($('a5-year').value); rerender(); };
   if (cfoSetTab === 'team') return a5SetTeam(body, CFO, me.access.admin, rerender, CFO_ROLE_LABEL);
   if (cfoSetTab === 's3') return cfoSetS3(body, rerender);
   const m = await a5Api(CFO, 'cfo/master');
@@ -926,7 +927,7 @@ function cfoSetRef(body, m, rerender, sheet) {
     <tr>${spec.cols.filter((c) => c[2]).map((c) => `<th class="num cfo-unit">${esc(c[2])}</th>`).join('')}</tr>`;
   const draw = () => {
     const term = cfoFilter.q.trim().toLowerCase();
-    const list = rows.filter((r) => (!cfoFilter.status || r.status === cfoFilter.status) && (!cfoFilter.group || r.grp === cfoFilter.group)
+    const list = rows.filter((r) => (!cfoFilter.status || r.status === cfoFilter.status)
       && (!term || `${r.name} ${r.formula || ''} ${r.grp || ''} ${r.reference || ''}`.toLowerCase().includes(term)));
     let band;
     const html = list.map((r) => {
@@ -950,10 +951,8 @@ function cfoSetRef(body, m, rerender, sheet) {
     ['cfo-edit', 'cfo-del'].forEach((b) => { if ($(b)) $(b).disabled = true; });
     bindRowSelect($('cfo-rows'), (id) => { picked = rows.find((r) => String(r.id) === id); ['cfo-edit', 'cfo-del'].forEach((b) => { if ($(b)) $(b).disabled = !picked; }); });
   };
-  if (cfoFilter.group && !groups.includes(cfoFilter.group)) cfoFilter.group = '';
   body.innerHTML = `
     <div class="toolbar a5-filters">${cfoEfPicker()}
-      ${field('กลุ่ม', `<select id="cfo-f-group">${options(['', ...groups], cfoFilter.group, (v) => v || 'ทั้งหมด')}</select>`)}
       ${field('สถานะ', `<select id="cfo-f-status">${options(['', 'Active', 'Inactive'], cfoFilter.status, (v) => v || 'ทั้งหมด')}</select>`)}
       ${searchSlot('ค้นหา', 'cfo-f-q', 'cfo-f-search', { placeholder: 'ชื่อ หรืออ้างอิง' })}
       ${m.admin ? `<div class="action-bar">${button('cfo-add', 'เพิ่ม', 'primary')}${button('cfo-edit', 'แก้ไข', 'secondary', 'disabled')}${button('cfo-del', 'ลบ', 'danger', 'disabled')}</div>` : ''}
@@ -963,7 +962,6 @@ function cfoSetRef(body, m, rerender, sheet) {
   $('cfo-f-q').value = cfoFilter.q;
   draw();
   a5Lift(body);
-  $('cfo-f-group').onchange = () => { cfoFilter.group = $('cfo-f-group').value; draw(); };
   $('cfo-f-status').onchange = () => { cfoFilter.status = $('cfo-f-status').value; draw(); };
   const search = () => { cfoFilter.q = $('cfo-f-q').value; draw(); };
   $('cfo-f-search').onclick = search;
