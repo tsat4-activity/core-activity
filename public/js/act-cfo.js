@@ -803,7 +803,8 @@ function cfoSetEfTab(body, m, rerender) {
   $('cfo-ef-view').onchange = () => { cfoEfView = $('cfo-ef-view').value; cfoSetEfTab(body, m, rerender); };
 }
 
-const cfoEfPicker = () => field('ตาราง', `<select id="cfo-ef-view">${options(Object.keys(CFO_EF_VIEWS), cfoEfView, (v) => CFO_EF_VIEWS[v])}</select>`);
+// table names in alphabetical order (ผู้ใช้กำหนด 2026-11-01)
+const cfoEfPicker = () => field('ตาราง', `<select id="cfo-ef-view">${options(Object.keys(CFO_EF_VIEWS).sort((a, b) => CFO_EF_VIEWS[a].localeCompare(CFO_EF_VIEWS[b], 'th')), cfoEfView, (v) => CFO_EF_VIEWS[v])}</select>`);
 
 // GWP100a per gas (mt_cfo_gwp) · a set that activities use keeps its values: add a new code and set the old one Inactive.
 function cfoSetGwp(body, m, rerender) {
