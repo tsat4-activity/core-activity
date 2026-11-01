@@ -35,7 +35,7 @@ let cfoDashTab = 'summary';
 let cfoSetTab = 'team';
 // Setting > Emission Factor (ผู้ใช้กำหนด 2026-11-01): the EF that activities use + separate reference tables of the TGO sheet
 // "EF TGO AR5 V2" (mt_cfo_ef_ref, seed db/act/cfo_ef_ref_seed.sql) so each table is easy to read and add to.
-const CFO_EF_VIEWS = { ef: 'EF ที่ใช้คำนวณ', gwp: 'GWP', energy: 'EF พลังงาน (ต่อหน่วย)', chemical: 'GWP สารเคมี', ipcc: 'EF IPCC (ต่อ TJ)' };
+const CFO_EF_VIEWS = { ef: 'EF ที่ใช้คำนวณ', gwp: 'GWP', energy: 'EF พลังงาน', chemical: 'GWP สารเคมี', ipcc: 'EF IPCC' };
 let cfoEfView = 'ef';
 const CFO_GWP_GASES = [['co2', 'CO₂'], ['ch4_fossil', 'Fossil CH₄'], ['ch4', 'CH₄'], ['n2o', 'N₂O'], ['sf6', 'SF₆'], ['nf3', 'NF₃']];
 // Columns of each reference table as in the sheet: [key, label, unit line, number column]
@@ -797,6 +797,7 @@ function cfoSetEf(body, m, rerender) {
   };
   body.innerHTML = `
     <div class="toolbar a5-filters">
+      ${cfoEfPicker()}
       ${field('Scope', `<select id="cfo-f-scope">${options(['', '1', '2', '3'], cfoFilter.scope, (v) => (v ? `Scope ${v}` : 'ทั้งหมด'))}</select>`)}
       ${field('สถานะ', `<select id="cfo-f-status">${options(['', 'Active', 'Inactive'], cfoFilter.status, (v) => v || 'ทั้งหมด')}</select>`)}
       ${searchSlot('ค้นหา', 'cfo-f-q', 'cfo-f-search', { placeholder: 'ชื่อ กลุ่ม หรือรหัส' })}
@@ -851,20 +852,23 @@ function cfoSetEf(body, m, rerender) {
 }
 
 // Emission Factor tab: one table at a time, picked in the row of buttons above it.
+// The table picker is a dropdown at the start of each table's toolbar (ผู้ใช้กำหนด 2026-11-01) · cells have light grid lines.
 function cfoSetEfTab(body, m, rerender) {
-  body.innerHTML = `<div class="cfo-efnav">${a5Seg('data-cfoef', CFO_EF_VIEWS, cfoEfView)}</div><div id="cfo-efbody"></div>`;
-  body.querySelectorAll('[data-cfoef]').forEach((node) => { node.onclick = () => { cfoEfView = node.dataset.cfoef; cfoSetEfTab(body, m, rerender); }; });
+  body.innerHTML = '<div id="cfo-efbody" class="cfo-efgrid"></div>';
   const box = $('cfo-efbody');
-  if (cfoEfView === 'gwp') return cfoSetGwp(box, m, rerender);
-  if (CFO_REF_COLS[cfoEfView]) return cfoSetRef(box, m, rerender, cfoEfView);
-  return cfoSetEf(box, m, rerender);
+  if (cfoEfView === 'gwp') cfoSetGwp(box, m, rerender);
+  else if (CFO_REF_COLS[cfoEfView]) cfoSetRef(box, m, rerender, cfoEfView);
+  else cfoSetEf(box, m, rerender);
+  $('cfo-ef-view').onchange = () => { cfoEfView = $('cfo-ef-view').value; cfoSetEfTab(body, m, rerender); };
 }
+
+const cfoEfPicker = () => field('ตาราง', `<select id="cfo-ef-view">${options(Object.keys(CFO_EF_VIEWS), cfoEfView, (v) => CFO_EF_VIEWS[v])}</select>`);
 
 // GWP100a per gas (mt_cfo_gwp) · a set that activities use keeps its values: add a new code and set the old one Inactive.
 function cfoSetGwp(body, m, rerender) {
   let picked = null;
   body.innerHTML = `
-    <div class="toolbar a5-filters"><strong class="plan-label">Global Warming Potential (GWP₁₀₀ₐ)</strong>
+    <div class="toolbar a5-filters">${cfoEfPicker()}
       ${m.admin ? `<div class="action-bar">${button('cfo-add', 'เพิ่ม', 'primary')}${button('cfo-edit', 'แก้ไข', 'secondary', 'disabled')}${button('cfo-del', 'ลบ', 'danger', 'disabled')}</div>` : ''}</div>
     <div class="table-wrap sheet" id="cfo-rows"></div>
     <p class="sum-meta">กิจกรรมเลือกชุด GWP ที่ใช้ (Setting > กิจกรรม) · ชุดที่ใช้แล้วแก้ค่าไม่ได้ ให้เพิ่มรหัสใหม่แล้วตั้งตัวเดิมเป็น Inactive</p>`;
@@ -943,14 +947,14 @@ function cfoSetRef(body, m, rerender, sheet) {
   };
   if (cfoFilter.group && !groups.includes(cfoFilter.group)) cfoFilter.group = '';
   body.innerHTML = `
-    <div class="toolbar a5-filters"><strong class="plan-label">${esc(spec.title)}</strong>
+    <div class="toolbar a5-filters">${cfoEfPicker()}
       ${field('กลุ่ม', `<select id="cfo-f-group">${options(['', ...groups], cfoFilter.group, (v) => v || 'ทั้งหมด')}</select>`)}
       ${field('สถานะ', `<select id="cfo-f-status">${options(['', 'Active', 'Inactive'], cfoFilter.status, (v) => v || 'ทั้งหมด')}</select>`)}
       ${searchSlot('ค้นหา', 'cfo-f-q', 'cfo-f-search', { placeholder: 'ชื่อ หรืออ้างอิง' })}
       ${m.admin ? `<div class="action-bar">${button('cfo-add', 'เพิ่ม', 'primary')}${button('cfo-edit', 'แก้ไข', 'secondary', 'disabled')}${button('cfo-del', 'ลบ', 'danger', 'disabled')}</div>` : ''}
     </div>
     <div class="table-wrap sheet" id="cfo-rows"></div>
-    <p class="sum-meta">${rows.length} รายการ · ตารางอ้างอิงตามแผ่น EF TGO AR5 V2 ไว้ดูค่าและที่มา (กิจกรรมใช้ค่าจาก "EF ที่ใช้คำนวณ") · Total ว่าง = คิดจาก GWP ${esc(gwp.code || '')} (CO₂ + Fossil CH₄ × ${gwp.ch4_fossil ?? '-'} + CH₄ × ${gwp.ch4 ?? '-'} + N₂O × ${gwp.n2o ?? '-'})</p>`;
+    <p class="sum-meta">${esc(spec.title)} · ${rows.length} รายการ · ตารางอ้างอิงตามแผ่น EF TGO AR5 V2 ไว้ดูค่าและที่มา (กิจกรรมใช้ค่าจาก "EF ที่ใช้คำนวณ") · Total ว่าง = คิดจาก GWP ${esc(gwp.code || '')} (CO₂ + Fossil CH₄ × ${gwp.ch4_fossil ?? '-'} + CH₄ × ${gwp.ch4 ?? '-'} + N₂O × ${gwp.n2o ?? '-'})</p>`;
   $('cfo-f-q').value = cfoFilter.q;
   draw();
   a5Lift(body);
