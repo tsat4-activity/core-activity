@@ -126,7 +126,7 @@ export function mountCfo(app) {
       fetchAll(() => tx.from(t.ef).select('id,scope_code,kind,name,unit,kgco2e').order('id')),
       fetchAll(() => tx.from(t.cfoScope).select('code,name').order('code')),
       fetchAll(() => tx.from(t.gwp).select('code,ch4').order('code')),
-      fetchAll(() => tx.from(t.entryView).select('id,month,activity_id,qty,tco2e').gte('month', `${year}-01-01`).lte('month', `${year}-12-01`).order('id')),
+      fetchAll(() => tx.from(t.entryView).select('*').gte('month', `${year}-01-01`).lte('month', `${year}-12-01`).order('id')).then((list) => list.filter((e) => (e.part || 'main') === 'main')),
       fetchAll(() => tx.from(t.entry).select('id,status,inputs,doc,remark,updated_at,updated_by').gte('month', `${year}-01-01`).lte('month', `${year}-12-01`).order('id'))
     ]);
     const efById = new Map(efs.map((e) => [e.id, e]));
@@ -163,7 +163,7 @@ export function mountCfo(app) {
     const month = monthOf(req.body?.month);
     const activityId = Number(req.body?.activityId);
     if (!month || !activityId) return fail(res, 400, 'เลือกกิจกรรมและเดือน');
-    const act = must(await tx.from(t.activity).select('id,department,calc,ef_id,gwp_code').eq('id', activityId).maybeSingle());
+    const act = must(await tx.from(t.activity).select('*').eq('id', activityId).maybeSingle());
     if (!act) return fail(res, 404, 'ไม่พบกิจกรรม');
     const access = await accessOf(req, activity, Number(month.slice(0, 4)));
     if (!access.admin && !access.departments.includes(act.department)) return fail(res, 403, `บันทึกได้เฉพาะตัวแทนหน่วยงาน ${act.department} หรือผู้จัดทำ`);
@@ -201,7 +201,8 @@ export function mountCfo(app) {
       if (uploaded.error) return fail(res, 400, /bucket/i.test(String(uploaded.error.message)) ? `ยังไม่ได้สร้างที่เก็บรูป ${t.bucket} ใน Tx Data` : 'อัปโหลดหลักฐานไม่ได้');
       doc = tx.storage.from(t.bucket).getPublicUrl(key).data.publicUrl;
     }
-    const row = { qty, inputs, doc, ef_id: ef.id, gwp_code: act.gwp_code, remark: text(req.body?.remark), updated_by: req.user.employeeId, updated_at: new Date().toISOString() };
+    const row = { qty, inputs, doc, ef_id: ef.id, gwp_code: act.gwp_code, remark: text(req.body?.remark), updated_by: req.user.employeeId, updated_at: new Date().toISOString(),
+      ...(act.ef3_id !== undefined ? { ef3_id: act.ef3_id } : {}) }; // ef3_id: column from db/act/cfo.sql 2026-11-01
     if (current) must(await tx.from(t.entry).update(row).eq('id', current.id));
     else must(await tx.from(t.entry).insert({ ...row, activity_id: act.id, month, created_by: req.user.employeeId }));
     res.json({ ok: true, qty });
@@ -390,6 +391,13 @@ export function mountCfo(app) {
       source_type: ref.sheet === 'cfp' ? null : 'tgo', separate: direct || biogenic || nonKyoto,
       kgco2e: biogenic || nonKyoto ? 0 : Number(ref.total), co2_bio: biogenic ? Number(ref.total) : null };
     if (ref.sheet === 'energy' && !biogenic) Object.assign(row, { co2: ref.co2, ch4_fossil: ref.ch4_fossil, ch4: ref.ch4, n2o: ref.n2o });
+    // B7 / E10 / ฟืน: the "Report in Scope 1" row and its "Report in Biogenic CO2" pair sit under the same heading,
+    // so one activity carries both (co2_bio is reported apart in Fr-04.1, not in the Scope total)
+    if (ref.sheet === 'energy' && !biogenic && !direct && /^-\s/.test(ref.name)) {
+      const next = must(await tx.from(t.efRef).select('name,total,unit').eq('sheet', 'energy').gt('sort_no', ref.sort_no).order('sort_no').limit(3));
+      const pair = next.find((r, i) => /biogenic/i.test(r.name) && next.slice(0, i).every((x) => /^-\s/.test(x.name)) && r.unit === ref.unit);
+      if (pair?.total != null) row.co2_bio = Number(pair.total);
+    }
     if (ref.sheet === 'chemical') Object.assign(row, nonKyoto ? { other: 1, other_gwp: Number(ref.total) } : { hfc: 1, hfc_gwp: Number(ref.total) });
     const base = `ref:${ref.id}:${scopeCode}${direct ? ':sep' : ''}`;
     const copies = must(await tx.from(t.ef).select('id,code,kgco2e,unit,co2_bio').like('code', `${base}*`).order('id', { ascending: false }))
@@ -424,6 +432,14 @@ export function mountCfo(app) {
       row.ef_id = (await efSeptic(t, scopeCode)).id;
     }
     if (!row.ef_id) return { error: 'เลือก Emission factor' };
+    if (b.ef3 !== undefined) {
+      const [kind, id] = String(b.ef3 || '').split(':');
+      if (kind === 'ref') {
+        const up = await efFromRef(t, Number(id), '3-3');
+        if (up.error) return up;
+        row.ef3_id = up.id;
+      } else row.ef3_id = kind === 'ef' && Number(id) ? Number(id) : null;
+    }
     return { row };
   };
   route('post', '/api/act/:activity/cfo/activities', async (req, res, activity, t) => {
@@ -532,7 +548,7 @@ export function mountCfo(app) {
     if (!year) return fail(res, 400, req.query.base === '1' ? 'ยังไม่ได้ตั้งปีฐาน (Setting > บริษัท)' : 'ปีไม่ถูกต้อง');
     const department = text(req.query.department, 80);
     const [entries, activities, efs, gwps, scopes] = await Promise.all([
-      fetchAll(() => tx.from(t.entry).select('activity_id,ef_id,gwp_code,qty').gte('month', `${year}-01-01`).lte('month', `${year}-12-01`).order('id')),
+      fetchAll(() => tx.from(t.entry).select('*').gte('month', `${year}-01-01`).lte('month', `${year}-12-01`).order('id')),
       fetchAll(() => tx.from(t.activity).select('id,department,name,detail,calc').order('id')),
       fetchAll(() => tx.from(t.ef).select('*').order('id')),
       fetchAll(() => tx.from(t.gwp).select('*')),
@@ -550,12 +566,17 @@ export function mountCfo(app) {
       const line = lines.get(key) || { a, f: ef.get(e.ef_id), g: gwp.get(e.gwp_code), qty: 0 };
       line.qty += Number(e.qty);
       lines.set(key, line);
+      if (!e.ef3_id) continue;
+      const up = `${e.activity_id}|${e.ef3_id}|${e.gwp_code}|up`;
+      const upLine = lines.get(up) || { a, f: ef.get(e.ef3_id), g: gwp.get(e.gwp_code), qty: 0, upstream: true };
+      upLine.qty += Number(e.qty);
+      lines.set(up, upLine);
     }
     const n = (v) => Number(v || 0);
     const r6 = (v) => Math.round(v * 1e6) / 1e6;
-    const rows = [...lines.values()].filter((l) => l.f && l.g).flatMap(({ a, f, g, qty }) => {
-      // Septic: qty is kg CH4 (EF CH4 = 1 kg/kg), as v_cfo_entry.
-      const septic = a.calc === 'septic';
+    const rows = [...lines.values()].filter((l) => l.f && l.g).flatMap(({ a, f, g, qty, upstream }) => {
+      // Septic: qty is kg CH4 (EF CH4 = 1 kg/kg), as v_cfo_entry · upstream = the 3-3 line (การได้มาของเชื้อเพลิง)
+      const septic = a.calc === 'septic' && !upstream;
       const efGas = { co2: septic ? 0 : n(f.co2), ch4_fossil: septic ? 0 : n(f.ch4_fossil), ch4: septic ? 1 : n(f.ch4), n2o: septic ? 0 : n(f.n2o), sf6: n(f.sf6), nf3: n(f.nf3) };
       const gw = { co2: n(g.co2) || 1, ch4_fossil: n(g.ch4_fossil), ch4: n(g.ch4), n2o: n(g.n2o), sf6: n(g.sf6), nf3: n(g.nf3) };
       const hfcGwp = f.hfc_gwp == null ? 1 : n(f.hfc_gwp);
@@ -568,7 +589,7 @@ export function mountCfo(app) {
       const s = scope.get(f.scope_code) || {};
       const row = {
         group: f.separate ? 'separate' : `s${s.scope}`, scope: s.scope, scope_code: f.scope_code, scope_name: s.name,
-        department: a.department, activity: a.name, detail: a.detail, source: f.name, unit: f.unit, qty: r6(qty),
+        department: a.department, activity: upstream ? `${a.name} (การได้มาของเชื้อเพลิง)` : a.name, detail: a.detail, source: f.name, unit: f.unit, qty: r6(qty),
         ef: { ...efGas, hfc: n(f.hfc), hfc_gwp: n(f.hfc) ? hfcGwp : null, pfc: n(f.pfc), pfc_gwp: n(f.pfc) ? pfcGwp : null, other: n(f.other), other_gwp: n(f.other_gwp) },
         total_ef: septic ? gw.ch4 : n(f.kgco2e), source_type: f.source_type, substitute: f.substitute, reference: f.reference,
         ton, tco2e, total: r6((qty * (septic ? gw.ch4 : n(f.kgco2e))) / 1000)

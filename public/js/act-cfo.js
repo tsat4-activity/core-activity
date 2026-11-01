@@ -38,6 +38,25 @@ const CFO_EF_VIEWS = { energy: 'EF พลังงาน', gwp: 'GWP', chemical:
 let cfoEfView = 'energy';
 // tables an activity can take its EF from (server REF_PICK)
 const CFO_EF_PICK = ['energy', 'chemical', 'cfp'];
+// <optgroup>s of the reference EF that pass keep(r): label = table · group · section (heading rows without a reference,
+// e.g. "On-road vehicles"), rows in sheet order · used by the activity form
+function cfoEfGroups(keep) {
+  return CFO_EF_PICK.map((sheet) => {
+    const out = new Map();
+    let section = '';
+    let grp = null;
+    m0().refs.filter((r) => r.sheet === sheet).sort((x, y) => x.sort_no - y.sort_no).forEach((r) => {
+      if (r.grp !== grp) { grp = r.grp; section = ''; }
+      if (!r.unit && r.total == null && !r.reference) { section = r.name; return; }
+      if (!r.unit || r.total == null || r.status !== 'Active' || !keep(r)) return;
+      const label = [CFO_EF_VIEWS[sheet], r.grp, section].filter(Boolean).join(' · ');
+      out.set(label, [...(out.get(label) || []), r]);
+    });
+    return [...out].map(([label, list]) => `<optgroup label="${esc(label)}">${list.map((r) => `<option value="ref:${r.id}">${esc(`${r.name.replace(/^-\s*/, '')} (${cfoRefNum(r.total)} kgCO₂e/${r.unit})`)}</option>`).join('')}</optgroup>`).join('');
+  }).join('');
+}
+let cfoMaster = null; // Setting master data of the open page (cfoEfGroups reads it)
+const m0 = () => cfoMaster;
 // activity form: Scope picks the categories and the EF that fit it (sep = การปล่อย GHG โดยตรงที่ทำการรายงานแยก)
 const CFO_ACT_TYPES = { 1: 'Scope 1', 2: 'Scope 2', 3: 'Scope 3', sep: 'การปล่อย GHG โดยตรงที่ทำการรายงานแยก' };
 const cfoBio = (r) => /biogenic/i.test(r.name);
@@ -48,6 +67,14 @@ const CFO_EF_FOR = {
   3: (r) => r.sheet === 'cfp' || (r.sheet === 'energy' && !cfoBio(r)),
   sep: (r) => cfoBio(r) || cfoNonKyoto(r)
 };
+// Scope 1 category → EF group (ผู้ใช้กำหนด 2026-11-01): 1-1 = Stationary Source · 1-2 = Mobile Source (On-road / Off-road) · 1-4 = สารทำความเย็น
+const CFO_EF_CATEGORY = {
+  '1-1': (r) => r.sheet === 'energy' && r.grp === 'Stationary Source',
+  '1-2': (r) => r.sheet === 'energy' && r.grp === 'Mobile Source',
+  '1-4': (r) => r.sheet === 'chemical'
+};
+// EF that fits the activity unit for the Scope 3-3 line (Liter = L = litre)
+const cfoUnitKey = (u) => String(u || '').trim().toLowerCase().replace(/^(l|liter|litre|ลิตร)$/, 'l');
 const CFO_GWP_GASES = [['co2', 'CO₂'], ['ch4_fossil', 'Fossil CH₄'], ['ch4', 'CH₄'], ['n2o', 'N₂O'], ['sf6', 'SF₆'], ['nf3', 'NF₃']];
 // Columns of each reference table as in the sheet: [key, label, unit line, number column]
 const CFO_REF_COLS = {
@@ -740,6 +767,7 @@ async function cfoSetting(target) {
   if (cfoSetTab === 'team') return a5SetTeam(body, CFO, me.access.admin, rerender, CFO_ROLE_LABEL);
   if (cfoSetTab === 's3') return cfoSetS3(body, rerender);
   const m = await a5Api(CFO, 'cfo/master');
+  cfoMaster = m;
   const draw = { activities: cfoSetActivities, ef: cfoSetEfTab, company: cfoSetCompany }[cfoSetTab] || cfoSetActivities;
   draw(body, m, rerender);
 }
@@ -794,11 +822,14 @@ function cfoSetActivities(body, m, rerender) {
       ${field('สูตรปริมาณ', '<select id="cfo-a-calc"></select>')}
       ${field('Emission factor', '<select id="cfo-a-ef"></select>')}
       <p class="sum-meta" id="cfo-a-hint"></p>
+      <div id="cfo-a-up">${field('EF การได้มาของเชื้อเพลิง (Scope 3-3)', '<select id="cfo-a-ef3"></select>')}<p class="sum-meta" id="cfo-a-hint3"></p></div>
       ${field('GWP', `<select id="cfo-a-gwp">${options(m.gwp.map((g) => g.code), a?.gwp_code || m.gwp[0]?.code)}</select>`)}
       ${field('สถานะ', `<select id="cfo-a-status">${options(['Active', 'Inactive'], a?.status || 'Active')}</select>`)}`, async () => {
       const [kind, id] = $('cfo-a-ef').value.split(':');
+      const ef3 = $('cfo-a-up').hidden ? '' : $('cfo-a-ef3').value;
       const body2 = { department: $('cfo-a-dept').value, name: $('cfo-a-name').value, detail: $('cfo-a-detail').value, gwp_code: $('cfo-a-gwp').value, calc: $('cfo-a-calc').value, status: $('cfo-a-status').value,
-        type: $('cfo-a-type').value, scope_code: $('cfo-a-scope').value, ...(kind === 'ref' ? { ref_id: id } : kind === 'ef' ? { ef_id: id } : {}) };
+        type: $('cfo-a-type').value, scope_code: $('cfo-a-scope').value, ...(kind === 'ref' ? { ref_id: id } : kind === 'ef' ? { ef_id: id } : {}),
+        ...(ef3 || a?.ef3_id ? { ef3 } : {}) }; // ef3 only when used, so saving works before db/act/cfo.sql adds the column
       await a5Api(CFO, `cfo/activities${a ? `/${a.id}` : ''}`, { method: a ? 'PATCH' : 'POST', body: body2 });
       toast('บันทึกแล้ว');
       closePopup();
@@ -828,22 +859,38 @@ function cfoSetActivities(body, m, rerender) {
         return;
       }
       const unitOk = (unit) => !CFO_CALCS[calc]?.unit || CFO_CALCS[calc].unit.test(unit || '');
-      const groups = CFO_EF_PICK.map((sheet) => {
-        const list = m.refs.filter((r) => r.sheet === sheet && r.unit && r.total != null && r.status === 'Active' && CFO_EF_FOR[type](r) && unitOk(r.unit));
-        return list.length ? `<optgroup label="${esc(CFO_EF_VIEWS[sheet])}">${list.map((r) => `<option value="ref:${r.id}">${esc(efName(r))}</option>`).join('')}</optgroup>` : '';
-      }).join('');
+      const inCategory = CFO_EF_CATEGORY[$('cfo-a-scope').value] || (() => true);
+      const groups = cfoEfGroups((r) => CFO_EF_FOR[type](r) && inCategory(r) && unitOk(r.unit));
       const own = current && unitOk(current.unit) ? `<optgroup label="EF ที่ใช้อยู่"><option value="ef:${current.id}" selected>${esc(cfoEfLabel(current))}</option></optgroup>` : '';
       const keep = box.value;
       box.innerHTML = `<option value="">- เลือก EF -</option>${own}${groups}`;
       if (keep && box.querySelector(`option[value="${keep}"]`)) box.value = keep;
       const n = box.querySelectorAll('option[value^="ref:"]').length;
-      $('cfo-a-hint').textContent = `${n} EF ที่ใช้กับ ${CFO_ACT_TYPES[type]}${CFO_CALCS[calc]?.unit ? ` และสูตร ${CFO_CALCS[calc].short} (หน่วย ${CFO_CALCS[calc].out})` : ''}${n ? '' : ' · ยังไม่มี เพิ่มได้ที่ Setting > Emission Factor'}`;
+      $('cfo-a-hint').textContent = `${n} EF ที่ใช้กับ ${CFO_ACT_TYPES[type]} หมวด ${$('cfo-a-scope').value}${CFO_CALCS[calc]?.unit ? ` และสูตร ${CFO_CALCS[calc].short} (หน่วย ${CFO_CALCS[calc].out})` : ''}${n ? '' : ' · ยังไม่มี เพิ่มได้ที่ Setting > Emission Factor'}`;
+      fillEf3();
+    };
+    // Scope 1 fuel: the same quantity is also counted in 3-3 (การได้มาของเชื้อเพลิง) with an EF of the same unit
+    const fillEf3 = () => {
+      const [kind, id] = $('cfo-a-ef').value.split(':');
+      const unit = kind === 'ref' ? m.refs.find((r) => String(r.id) === id)?.unit : kind === 'ef' ? current?.unit : null;
+      const show = $('cfo-a-type').value === '1' && $('cfo-a-calc').value !== 'septic' && ['1-1', '1-2'].includes($('cfo-a-scope').value);
+      $('cfo-a-up').hidden = !show;
+      if (!show) return;
+      const box = $('cfo-a-ef3');
+      const keep = box.value || (a?.ef3_id ? `ef:${a.ef3_id}` : '');
+      const own = a?.ef3_id ? m.ef.find((e) => e.id === a.ef3_id) : null;
+      const groups = unit ? cfoEfGroups((r) => (r.sheet === 'cfp' || r.sheet === 'energy') && !cfoBio(r) && cfoUnitKey(r.unit) === cfoUnitKey(unit) && r.id !== Number(id)) : '';
+      box.innerHTML = `<option value="">- ไม่คิด 3-3 -</option>${own ? `<optgroup label="EF ที่ใช้อยู่"><option value="ef:${own.id}">${esc(cfoEfLabel(own))}</option></optgroup>` : ''}${groups}`;
+      if (keep && box.querySelector(`option[value="${keep}"]`)) box.value = keep;
+      $('cfo-a-hint3').textContent = unit ? `ปริมาณเดียวกัน (${unit}) คิดอีกบรรทัดใน 3-3 · EF การได้มาของเชื้อเพลิง เพิ่มที่ Setting > Emission Factor > EF CFP (หน่วย ${unit})` : 'เลือก EF ด้านบนก่อน';
     };
     fillScope();
     fillCalc();
     fillEf();
     $('cfo-a-type').onchange = () => { fillScope(); fillCalc(); fillEf(); };
+    $('cfo-a-scope').onchange = fillEf;
     $('cfo-a-calc').onchange = fillEf;
+    $('cfo-a-ef').onchange = fillEf3;
   };
   $('cfo-add').onclick = () => form(null);
   $('cfo-edit').onclick = () => picked && form(picked);

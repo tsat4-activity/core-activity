@@ -289,6 +289,13 @@ if (!fs.existsSync(cfoFile)) {
     (select sum(tco2e_other)::float from v_cfo_entry where separate) other`);
   await db.exec('rollback');
   ok(Math.abs(sep.s1 + sep.sep - 188.863) < 0.01 && sep.other > 0, `separately reported EF leaves Scope 1 (${sep.s1} + ${sep.sep}) and carries its non-Kyoto tCO2e`);
+  // EF การได้มาของเชื้อเพลิง (ef3_id): the same quantity adds a Scope 3-3 line and leaves Scope 1 as it was.
+  await db.exec(`begin; insert into mt_cfo_ef (code, scope_code, name, unit, kgco2e) values ('t-up', '3-3', 'Diesel B7 upstream', 'Liter', 0.5);
+    update tx_cfo_entry set ef3_id = (select id from mt_cfo_ef where code = 't-up') where id = (select id from tx_cfo_entry where qty > 0 order by id limit 1)`);
+  const up = await one(db, `select (select round(sum(tco2e), 3)::float from v_cfo_month where scope = 1) s1, (select tco2e::float from v_cfo_entry where part = 'upstream') t3,
+    (select round(qty * 0.5 / 1000, 6)::float from tx_cfo_entry where ef3_id is not null) want, (select scope_code from v_cfo_entry where part = 'upstream') code`);
+  await db.exec('rollback');
+  ok(Math.abs(up.s1 - 188.863) < 0.01 && up.t3 === up.want && up.code === '3-3', `the 3-3 line uses the entry quantity × its EF (${up.t3}) and Scope 1 stays ${up.s1}`);
   ok(await throws(db, `insert into mt_cfo_s3_assess (year, scope_code) values (2026, '1-1')`), 'Fr-03.2 rows are Scope 3 categories only');
   {
     // Fr-03.2 criteria were ✓ / × (boolean) and are now % scores: ✓ = 1.00, × = 0, and the file runs again cleanly

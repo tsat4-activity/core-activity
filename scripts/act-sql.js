@@ -308,7 +308,13 @@ insert into public.mt_${k}_setting (key, value) values
   ('target_percent', '5')                 -- เป้าลดจากปีฐาน (%) ค่าเดิมของ TSATP4-CFO
 on conflict (key) do nothing;
 
+-- EF การได้มาของเชื้อเพลิง (Scope 3-3, ผู้ใช้กำหนด 2026-11-01): ปริมาณเดียวกันของกิจกรรมคิดอีกบรรทัดใน 3-3
+-- เช่น กระบะ B7 = Scope 1 (Report in Scope 1) + รายงานแยก (co2_bio ของ EF) + 3-3 การได้มาของ B7 · entry เก็บ ef3_id ตอนบันทึก
+alter table public.mt_${k}_activity add column if not exists ef3_id bigint references public.mt_${k}_ef (id);
+alter table public.tx_${k}_entry add column if not exists ef3_id bigint references public.mt_${k}_ef (id);
+
 -- ผลต่อแถว: tCO2e = qty × kgco2e / 1000 · แยกก๊าซ (Scope 1) = qty × EF ก๊าซ × GWP / 1000
+-- part = main (EF ของกิจกรรม) / upstream (บรรทัด 3-3 จาก ef3_id: tCO2e = qty × kgco2e ของ EF นั้น / 1000)
 -- บ่อเกรอะ (calc = septic): qty = kg CH4 → tCO2e = qty × GWP CH4 ของรายการ / 1000 (เหมือน TSATP4-CFO saveSepticTx_)
 create or replace view public.v_${k}_entry with (security_invoker = true) as
 select e.id, e.month, e.status, a.department, a.name as activity, a.detail, s.scope, s.code as scope_code, s.name as scope_name,
@@ -322,12 +328,24 @@ select e.id, e.month, e.status, a.department, a.name as activity, a.detail, s.sc
   round(e.qty * (coalesce(f.sf6, 0) * g.sf6 + coalesce(f.nf3, 0) * g.nf3) / 1000, 6) as tco2e_sf6_nf3,
   round(e.qty * coalesce(f.other, 0) * coalesce(f.other_gwp, 0) / 1000, 6) as tco2e_other,
   f.separate,                                             -- รายงานแยก: ไม่รวมในยอด Scope
-  round(e.qty * coalesce(f.co2_bio, 0) / 1000, 6) as tco2e_bio  -- CO2 ชีวมวล รายงานแยก
+  round(e.qty * coalesce(f.co2_bio, 0) / 1000, 6) as tco2e_bio, -- CO2 ชีวมวล รายงานแยก
+  'main'::text as part
 from public.tx_${k}_entry e
 join public.mt_${k}_activity a on a.id = e.activity_id
 join public.mt_${k}_ef f on f.id = e.ef_id
 join public.mt_${k}_scope s on s.code = f.scope_code
-join public.mt_${k}_gwp g on g.code = e.gwp_code;
+join public.mt_${k}_gwp g on g.code = e.gwp_code
+union all
+select e.id, e.month, e.status, a.department, a.name, a.detail, s.scope, s.code, s.name,
+  f.name, f.unit, e.qty, f.kgco2e,
+  round(e.qty * f.kgco2e / 1000, 6),
+  0::numeric, 0::numeric, 0::numeric, 0::numeric,
+  e.activity_id, 0::numeric, 0::numeric, f.separate, 0::numeric,
+  'upstream'::text
+from public.tx_${k}_entry e
+join public.mt_${k}_activity a on a.id = e.activity_id
+join public.mt_${k}_ef f on f.id = e.ef3_id
+join public.mt_${k}_scope s on s.code = f.scope_code;
 
 -- รวมรายเดือนต่อ Scope (Dashboard) · ไม่รวมรายการที่รายงานแยก
 create or replace view public.v_${k}_month with (security_invoker = true) as
