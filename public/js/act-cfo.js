@@ -806,7 +806,8 @@ function cfoSetActivities(body, m, rerender) {
     });
     const fillScope = () => {
       const type = $('cfo-a-type').value;
-      const list = m.scopes.filter((sc) => String(sc.scope) === (type === 'sep' ? '1' : type));
+      // by number: 3-1, 3-2 … 3-15 (the code is text, so the server order puts 3-10 after 3-1)
+      const list = m.scopes.filter((sc) => String(sc.scope) === (type === 'sep' ? '1' : type)).sort((x, y) => Number(x.code.split('-')[1]) - Number(y.code.split('-')[1]));
       const keep = list.some((sc) => sc.code === $('cfo-a-scope').value) ? $('cfo-a-scope').value : (current && list.some((sc) => sc.code === current.scope_code) ? current.scope_code : list[0]?.code);
       $('cfo-a-scope').innerHTML = list.map((sc) => `<option value="${esc(sc.code)}"${sc.code === keep ? ' selected' : ''}>${esc(sc.code)} ${esc(sc.name_th || sc.name)}</option>`).join('') || '<option value="">ยังไม่มีหมวด (รัน db/act/cfo.sql)</option>';
     };
