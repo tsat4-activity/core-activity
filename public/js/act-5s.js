@@ -7,13 +7,14 @@ const A5_GROUPS = { '5s': ['สะสาง', 'สะดวก', 'สะอา�
 const A5_TEAMS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
 const A5_TEAM_COLORS = { A: '#1f2937', B: '#ec4899', C: '#f97316', D: '#ca8a04', E: '#0d9488', F: '#2563eb', G: '#9333ea', H: '#06b6d4', I: '#9ca3af' };
 const A5_AREA_TYPES = ['โรงงาน', 'สำนักงาน'];
-// 5S team (ผู้ใช้กำหนด 2026-10-30): คณะกรรมการ 5ส (unit ว่าง) = ประธาน · รองประธาน · ที่ปรึกษา · ผู้ประสานงาน, then four teams
-// (mt_5s_team.unit) with the same four leads + สมาชิก · ทีมตรวจประเมิน also has ผู้รับผิดชอบพื้นที่ and ผู้ตรวจประเมิน (กลุ่ม A–I).
+// 5S team (ผู้ใช้กำหนด 2026-10-30, ปรับ 2026-11-01): four teams only (mt_5s_team.unit), no committee · each team has
+// ประธาน · รองประธาน · ที่ปรึกษา · ผู้ประสานงาน + สมาชิก · ทีมตรวจประเมิน has no สมาชิก: its people are split by role into
+// ผู้รับผิดชอบพื้นที่ and ผู้ตรวจประเมิน (กลุ่ม A–I). Rows saved earlier without a team show as ไม่ระบุทีม until edited.
 const A5_ROLE_LABEL = { ...ACT_TEAM_ROLES, owner: 'ผู้รับผิดชอบพื้นที่', auditor: 'ผู้ตรวจประเมิน' };
-const A5_UNITS = { '': 'คณะกรรมการ 5ส', standard: 'ทีมมาตรฐาน', academic: 'ทีมวิชาการ', pr: 'ทีมประชาสัมพันธ์', audit: 'ทีมตรวจประเมิน' };
+const A5_UNITS = { '': 'ไม่ระบุทีม', standard: 'ทีมมาตรฐาน', academic: 'ทีมวิชาการ', pr: 'ทีมประชาสัมพันธ์', audit: 'ทีมตรวจประเมิน' };
 const A5_UNIT_LOOK = { '': ['#475569', 'groups'], standard: ['#0d9488', 'verified'], academic: ['#2563eb', 'menu_book'], pr: ['#d97706', 'campaign'], audit: ['#7c3aed', 'fact_check'] };
 // Roles each unit may hold, in screen order
-const a5RolesOf = (unit) => (unit === '' ? ['chairman', 'vice', 'advisor', 'admin'] : ['chairman', 'vice', 'advisor', 'admin', 'member', ...(unit === 'audit' ? ['owner', 'auditor'] : [])]);
+const a5RolesOf = (unit) => ['chairman', 'vice', 'advisor', 'admin', ...(unit === 'audit' ? ['owner', 'auditor'] : unit ? ['member'] : [])];
 // Sub-teams per activity (server ACT_UNITS); others have one team
 const A5_UNITS_OF = { '5s': A5_UNITS };
 const A5_DASH_TABS = { summary: 'Summary', ranking: 'Ranking', schedule: 'Schedule', audit: 'Audit Plan', team: 'Team' };
@@ -208,12 +209,8 @@ async function a5DrawTeam(body, activity) {
     return `<div class="a5-team-head"><span class="a5-badge" style="background:${tone}"><span class="material-symbols-rounded" style="font-size:15px">${icon}</span></span>${esc(A5_UNITS[unit])}<span>${count} คน</span></div>`;
   };
   const leads = (list) => ['chairman', 'vice', 'advisor', 'admin', 'member'].flatMap((role) => list.filter((m) => m.role === role).map((m) => person(m, A5_ROLE_LABEL[role]))).join('');
-  // คณะกรรมการ 5ส: one card per role
+  // rows saved before the committee was dropped (no team): listed apart until an admin moves them into a team
   const top = active.filter((m) => unitOf(m) === '');
-  const topCards = a5RolesOf('').map((role) => {
-    const list = top.filter((m) => m.role === role);
-    return `<div class="a5-team" style="--team:${A5_UNIT_LOOK[''][0]}"><div class="a5-team-head">${esc(A5_ROLE_LABEL[role])}<span>${list.length}</span></div>${list.map((m) => person(m)).join('') || '<div class="a5-person">-</div>'}</div>`;
-  }).join('');
   // the four teams: leads + members; ทีมตรวจประเมิน also lists its auditors (by กลุ่ม) and the area owners
   const unitCards = ['standard', 'academic', 'pr', 'audit'].map((unit) => {
     const list = active.filter((m) => unitOf(m) === unit);
@@ -230,10 +227,9 @@ async function a5DrawTeam(body, activity) {
   }).join('');
   const title = (icon, text) => `<div class="a5-team-title"><span class="material-symbols-rounded">${icon}</span>${text}</div>`;
   body.innerHTML = `
-    ${title('groups', esc(A5_UNITS['']))}
-    <div class="a5-team-grid a5-team-top">${topCards}</div>
-    ${title('account_tree', 'ทีมย่อย')}
+    ${title('account_tree', `ทีม 5ส ปี ${a5Year}`)}
     <div class="a5-team-grid a5-unit-grid">${unitCards}</div>
+    ${top.length ? `${title('help', `ไม่ระบุทีม ${top.length} คน (แก้ไขที่ Setting > ทีม เพื่อเลือกทีม)`)}<div class="a5-team-grid">${top.map((m) => `<div class="a5-team" style="--team:${A5_UNIT_LOOK[''][0]}">${person(m, A5_ROLE_LABEL[m.role] || m.role)}</div>`).join('')}</div>` : ''}
     <p class="sum-meta">ปี ${a5Year} · ${active.length} รายชื่อ · ผู้รับผิดชอบพื้นที่ Self Audit 25 ข้อก่อนวันที่ 10 ทุกเดือน · ผู้ตรวจประเมิน Committee Audit ทุก 3 เดือน</p>`;
   a5Lift(body);
 }
@@ -364,13 +360,15 @@ async function a5SetTeam(body, activity, admin, rerender, roles = A5_ROLE_LABEL,
   // One form for add (m = null: pick the employee) and edit (m = the row: the employee stays, the rest can change).
   const form = (m) => {
     let chosen = m ? { employeeId: m.employee_id, name: m.name } : null;
-    const unit0 = m ? unitOf(m) : '';
+    // 5S has no committee: a team is required (an old row without one may stay as it is until a team is picked)
+    const teamKeys = A5_UNITS_OF[activity] ? unitKeys.filter((k) => k || (m && !unitOf(m))) : unitKeys;
+    const unit0 = m ? unitOf(m) : teamKeys[0];
     // 5S: a5RolesOf · project teams (SMF): the four leads + สมาชิก · the committee: every role of the activity
     const rolesFor = (unit) => (!units ? keys : A5_UNITS_OF[activity] ? a5RolesOf(unit) : unit ? ['chairman', 'vice', 'advisor', 'admin', 'member'] : keys.filter((r) => !['owner', 'auditor'].includes(r)));
     const roleOptions = (unit, current) => options(rolesFor(unit).filter((r) => keys.includes(r)), current || '', (v) => roleLabel(v, unit));
     const who = m ? field('พนักงาน', `<input value="${esc(`${m.employee_id} · ${m.name || ''}`)}" disabled>`) : a5EmpField('พนักงาน');
     openPopup(m ? `แก้ไขรายชื่อปี ${a5Year}` : `เพิ่มรายชื่อปี ${a5Year}`, `${who}
-      ${units ? field('ทีม', `<select id="a5-unit">${options(unitKeys, unit0, (v) => units[v])}</select>`) : ''}
+      ${units ? field('ทีม', `<select id="a5-unit">${options(teamKeys, unit0, (v) => units[v])}</select>`) : ''}
       ${field('บทบาท', `<select id="a5-role">${roleOptions(unit0, m?.role)}</select>`)}
       ${hasTeam ? field('กลุ่มตรวจ (เฉพาะผู้ตรวจประเมิน)', `<select id="a5-team">${options(A5_TEAMS, m?.team || 'A', (t) => `กลุ่ม ${t}`)}</select>`, '') : ''}
       ${keys.includes('owner') && areasList.length ? field('พื้นที่ (เฉพาะผู้รับผิดชอบพื้นที่)', `<select id="a5-owner-area">${options(areasList.map((a) => a.id), m?.area_id || areasList[0]?.id, (id) => { const a = areasList.find((x) => String(x.id) === String(id)); return a ? `${a.code} - ${a.name}` : id; })}</select>`, '') : ''}

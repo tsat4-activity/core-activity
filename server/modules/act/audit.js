@@ -311,6 +311,9 @@ export function mountAudit(app) {
     const areaId = role === 'owner' && body?.areaId ? Number(body.areaId) : null;
     const department = role === 'member' && !unit ? String(body?.department || '').trim().slice(0, 80) : '';
     if (!role) return { error: 'เลือกบทบาท' };
+    // 5S (ผู้ใช้กำหนด 2026-11-01): no committee, every row is in one of the four teams · ทีมตรวจประเมิน has no สมาชิก
+    if (units.includes(AUDIT_UNIT) && !unit) return { error: 'เลือกทีม (ทีมมาตรฐาน / วิชาการ / ประชาสัมพันธ์ / ตรวจประเมิน)' };
+    if (unit === AUDIT_UNIT && role === 'member') return { error: 'ทีมตรวจประเมินไม่มีสมาชิก เลือกผู้รับผิดชอบพื้นที่หรือผู้ตรวจประเมิน' };
     if (role === 'auditor' && !/^[A-Z]$/.test(team)) return { error: 'ผู้ตรวจต้องเลือกกลุ่มตรวจ A–Z' };
     if (role === 'owner' && !areaId) return { error: 'ผู้รับผิดชอบพื้นที่ต้องระบุพื้นที่' };
     if (role === 'member' && !unit && !department) return { error: 'ตัวแทนหน่วยงานต้องระบุหน่วยงาน' };

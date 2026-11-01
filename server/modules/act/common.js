@@ -154,9 +154,9 @@ export async function accessOf(req, activity, year) {
   if (team.error) throw team.error;
   const roles = team.data || [];
   const access = {
-    // Setting: the committee's ผู้ประสานงาน (admin, no unit) · smart = SMF Smart Team (docs/specs/act-smf.md).
-    // A sub-team's own ผู้ประสานงาน / ประธาน leads that team only, so it does not get these rights.
-    admin: lead || roles.some((r) => (r.role === 'admin' && !r.unit) || r.role === 'smart'),
+    // Setting: the committee's ผู้ประสานงาน (admin, no unit) · 5S has no committee, so the ผู้ประสานงาน of any of its teams
+    // (ผู้ใช้กำหนด 2026-11-01) · smart = SMF Smart Team (docs/specs/act-smf.md) · an SMF project's ผู้ประสานงาน leads that project only.
+    admin: lead || roles.some((r) => (r.role === 'admin' && (!r.unit || !PROJECT_ON.includes(activity))) || r.role === 'smart'),
     // Committee Audit and Issue rights: the committee's ประธาน / รองประธาน and those of ทีมตรวจประเมิน.
     chairman: executive || roles.some((r) => (r.role === 'chairman' || r.role === 'vice') && (!r.unit || r.unit === AUDIT_UNIT)),
     advisor: roles.some((r) => r.role === 'advisor'),
