@@ -713,11 +713,16 @@ body[data-zone] .plan-col.is-today{border-color:var(--zone)}
 td.cfo-ref{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Setting > Emission Factor: table dropdown + reference tables like the TGO sheet (two-line header, group bands) */
 /* every cell boxed like Excel with a light line (ผู้ใช้กำหนด 2026-11-01) */
+/* the same column kind has the same width on every EF table; long text ends in … (full text on hover) */
+.cfo-efgrid :is(td,th).c-name{width:300px;min-width:300px;max-width:300px}.cfo-efgrid :is(td,th).c-formula{width:200px;min-width:200px;max-width:200px}
+.cfo-efgrid :is(td,th).c-unit{width:100px;min-width:100px;max-width:100px}.cfo-efgrid :is(td,th).c-num{width:120px;min-width:120px;max-width:120px}
+.cfo-efgrid :is(td,th).c-reference{width:340px;min-width:340px;max-width:340px}.cfo-efgrid :is(td,th).c-remark{width:240px;min-width:240px;max-width:240px}
+.cfo-efgrid td:is(.c-name,.c-formula,.c-unit,.c-reference,.c-remark){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cfo-efgrid table.mo-data-table{border-collapse:collapse}.cfo-efgrid table.mo-data-table :is(td,th){border:1px solid color-mix(in srgb,var(--mo-line) 55%,transparent)}
 .cfo-reftab thead{position:sticky;top:0;z-index:5}.cfo-reftab thead th{position:static;height:auto;padding:4px 8px;text-align:center;white-space:nowrap}
 .cfo-reftab thead th.cfo-unit{font-size:11px;font-weight:500}
 .cfo-reftab .cfo-band td{background:color-mix(in srgb,var(--mo-primary) 10%,transparent);font-weight:700}
-.cfo-reftab td.cfo-name{max-width:280px}.cfo-reftab .cfo-head{font-weight:600}.cfo-reftab .cfo-child{padding-left:26px}.cfo-reftab tr.is-muted td{opacity:.55}
+.cfo-reftab .cfo-head{font-weight:600}.cfo-reftab .cfo-child{padding-left:26px}.cfo-reftab tr.is-muted td{opacity:.55}
 .cfo-inv .cfo-group td{background:var(--mo-surface-2);font-weight:600}.cfo-inv .cfo-sub-total td{font-weight:600;background:color-mix(in srgb,var(--mo-text-muted) 7%,var(--mo-surface))}
 .cfo-inv .cfo-total td{font-weight:600;background:color-mix(in srgb,var(--mo-text-muted) 14%,var(--mo-surface))}
 #cfo-rev-rows table{width:100%}.cfo-rev-detail{white-space:normal;min-width:260px;max-width:520px;line-height:1.35;padding-top:4px;padding-bottom:4px}

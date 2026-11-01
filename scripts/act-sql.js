@@ -180,6 +180,7 @@ alter table public.mt_${k}_ef add constraint mt_${k}_ef_source_type
 -- ตารางอ้างอิง EF ตามแผ่น EF TGO AR5 V2 (ผู้ใช้กำหนด 2026-11-01) ไว้ดูและค้น ไม่ได้ใช้คำนวณตรง (กิจกรรมใช้ mt_${k}_ef)
 -- sheet: energy = EF การใช้พลังงาน (ต่อหน่วย) · chemical = GWP สารเคมี / สารทำความเย็น · ipcc = EF จาก IPCC Guidelines (ต่อ TJ)
 --   · fuel = คุณสมบัติเชื้อเพลิง (grp = Heating value / Density / Conversion Factor, ค่าอยู่ใน total)
+--   · cfp = EF ของ CFP ไว้คำนวณย่อย (total = kgCO2-eq ต่อหน่วย, formula = รายละเอียด) ผู้ใช้กรอก / วางจาก Excel เอง
 -- grp = หัวกลุ่ม (Stationary Source / Mobile Source / Electricity / Refrigerants) · แถวที่ไม่มีหน่วยและไม่มีค่า = หัวข้อย่อย
 -- total = kgCO2-eq ต่อหน่วย (ว่าง + มีค่าแยกก๊าซ = server คิดจาก GWP) · ratio = สัดส่วนชีวมวล (B7 = 0.07) · ข้อมูลตั้งต้น db/act/cfo_ef_ref_seed.sql
 create table if not exists public.mt_${k}_ef_ref (
@@ -199,7 +200,7 @@ create table if not exists public.mt_${k}_ef_ref (
 );
 create index if not exists mt_${k}_ef_ref_sheet on public.mt_${k}_ef_ref (sheet, sort_no);
 alter table public.mt_${k}_ef_ref drop constraint if exists mt_${k}_ef_ref_sheet_check;
-alter table public.mt_${k}_ef_ref add constraint mt_${k}_ef_ref_sheet_check check (sheet in ('energy', 'chemical', 'ipcc', 'fuel'));
+alter table public.mt_${k}_ef_ref add constraint mt_${k}_ef_ref_sheet_check check (sheet in ('energy', 'chemical', 'ipcc', 'fuel', 'cfp'));
 
 -- กิจกรรมที่ต้องเก็บข้อมูลทุกเดือน (รถผู้บริหาร, Forklift, ไฟฟ้า ...) ของหน่วยงานไหน ใช้ EF ตัวไหน
 create table if not exists public.mt_${k}_activity (

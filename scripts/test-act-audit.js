@@ -267,7 +267,8 @@ await db.exec(refSeed);
 const ref = await one(db, `select (select count(*)::int from mt_cfo_ef_ref where sheet = 'energy') energy, (select count(*)::int from mt_cfo_ef_ref where sheet = 'chemical') chemical,
   (select count(*)::int from mt_cfo_ef_ref where sheet = 'ipcc') ipcc, (select count(*)::int from mt_cfo_ef_ref where sheet = 'fuel') fuel, (select total::float from mt_cfo_ef_ref where name = 'R-32') r32, (select ch4::float from mt_cfo_gwp where code = 'AR5') ch4`);
 ok(ref.energy > 100 && ref.chemical > 10 && ref.ipcc > 40 && ref.fuel === 30 && ref.r32 === 9 && ref.ch4 === 28, `EF reference seed runs twice without duplicates or overwrites ${JSON.stringify(ref)}`);
-ok(await throws(db, `insert into mt_cfo_ef_ref (sheet, name) values ('web', 'x')`), 'EF reference sheet is energy / chemical / ipcc / fuel');
+ok(await throws(db, `insert into mt_cfo_ef_ref (sheet, name) values ('web', 'x')`), 'EF reference sheet is energy / chemical / ipcc / fuel / cfp');
+await db.exec(`insert into mt_cfo_ef_ref (sheet, name, unit, total) values ('cfp', 'Steel sheet', 'kg', 2.3); delete from mt_cfo_ef_ref where sheet = 'cfp'`);
 const cfoFile = path.join(ROOT, 'inbox', 'import_cfo.sql');
 if (!fs.existsSync(cfoFile)) {
   console.log('skip CFO data: inbox/import_cfo.sql not found (python -I scripts/import_cfo_excel.py)');

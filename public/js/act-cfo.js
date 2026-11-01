@@ -34,7 +34,7 @@ let cfoSetTab = 'team';
 // Setting > Emission Factor (ผู้ใช้กำหนด 2026-11-01): GWP + separate reference tables of the TGO sheet
 // "EF TGO AR5 V2" (mt_cfo_ef_ref, seed db/act/cfo_ef_ref_seed.sql) so each table is easy to read and add to.
 // "EF ที่ใช้คำนวณ" was cut from here (ผู้ใช้สั่ง 2026-11-01); mt_cfo_ef stays for activities and entries.
-const CFO_EF_VIEWS = { energy: 'EF พลังงาน', gwp: 'GWP', chemical: 'GWP สารเคมี', ipcc: 'EF IPCC', fuel: 'คุณสมบัติเชื้อเพลิง' };
+const CFO_EF_VIEWS = { energy: 'EF พลังงาน', gwp: 'GWP', chemical: 'GWP สารเคมี', ipcc: 'EF IPCC', fuel: 'คุณสมบัติเชื้อเพลิง', cfp: 'EF CFP' };
 let cfoEfView = 'energy';
 const CFO_GWP_GASES = [['co2', 'CO₂'], ['ch4_fossil', 'Fossil CH₄'], ['ch4', 'CH₄'], ['n2o', 'N₂O'], ['sf6', 'SF₆'], ['nf3', 'NF₃']];
 // Columns of each reference table as in the sheet: [key, label, unit line, number column]
@@ -45,7 +45,9 @@ const CFO_REF_COLS = {
   ipcc: { title: 'GHG Emission Factors from IPCC Guidelines', cols: [['name', 'Emission Source'], ['co2', 'CO₂', '(kgCO₂/TJ)', 1], ['ch4_fossil', 'Fossil CH₄', '(kgCH₄/TJ)', 1], ['ch4', 'CH₄', '(kgCH₄/TJ)', 1],
     ['n2o', 'N₂O', '(kgN₂O/TJ)', 1], ['total', 'Total', '(kgCO₂-eq/TJ)', 1], ['reference', 'Emission Reference']] },
   // grp = Heating value / Density / Conversion Factor: the band row names what the value is
-  fuel: { title: 'Defaults for Fuel Heating Value (LHV, NCV) & Other Properties', cols: [['name', 'Fuel'], ['total', 'ค่า', '(Heating value / Density / Factor)', 1], ['unit', 'Unit'], ['reference', 'Reference']] }
+  fuel: { title: 'Defaults for Fuel Heating Value (LHV, NCV) & Other Properties', cols: [['name', 'Fuel'], ['total', 'ค่า', '(ตาม Unit)', 1], ['unit', 'Unit'], ['reference', 'Reference']] },
+  // EF ของ CFP (Carbon Footprint of Product) ไว้คำนวณย่อย (ผู้ใช้ขอ 2026-11-01) · grp = หมวด (วัสดุ / ขนส่ง / ของเสีย ...)
+  cfp: { title: 'Emission Factor ของ CFP (Carbon Footprint of Product) สำหรับคำนวณย่อย', cols: [['name', 'รายการ'], ['formula', 'รายละเอียด'], ['unit', 'Unit'], ['total', 'EF', '(kgCO₂-eq/unit)', 1], ['reference', 'แหล่งข้อมูล'], ['remark', 'หมายเหตุ / วันที่ปรับปรุง']] }
 };
 const cfoFilter = { scope: '', department: '', q: '', status: '' };
 // page: Summary หน้า 1 (monthly accumulation) / หน้า 2 (summary by Scope), picked in the dropdown before the year
@@ -53,6 +55,8 @@ const cfoDash = { department: '', chartScope: '', scope: '1', page: '1' };
 // transaction filters: Scope → month (one month, or '' = the year) → category (main) → activity (sub)
 const cfoTx = { scope: '1', month: String(new Date().getMonth() + 1), category: '', activity: '' };
 const cfoHeads = { entries: { sort: '', dir: 'asc', filters: {} }, activities: { sort: '', dir: 'asc', filters: {} } };
+// width class of a reference-table column (app.css .cfo-efgrid .c-*): every EF table lines up (ผู้ใช้กำหนด 2026-11-01)
+const cfoCol = (key, num) => (num ? 'c-num' : ['name', 'formula', 'unit', 'reference', 'remark'].includes(key) ? `c-${key}` : 'c-name');
 // reference tables: 5 decimals like the user asked (ผู้ใช้กำหนด 2026-11-01) · the full value is in the cell's tooltip
 const cfoRefNum = (v) => (v == null || v === '' ? '' : Number(v).toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 }));
 // small EF values (1.02e-6) stay readable: exponent below 0.001, else up to 6 decimals like the sheet
@@ -808,7 +812,7 @@ function cfoSetGwp(body, m, rerender) {
     const term = cfoFilter.q.trim().toLowerCase();
     const list = m.gwp.filter((g) => (!cfoFilter.status || g.status === cfoFilter.status) && (!term || `${g.code} ${g.reference || ''}`.toLowerCase().includes(term)));
     fillTable('cfo-rows', ['รหัส', ...CFO_GWP_GASES.map(([, label]) => ({ label, num: true })), 'อ้างอิง', 'ใช้แล้ว', 'สถานะ'],
-      list.map((g) => `<tr data-pick="${esc(g.code)}"><td><b>${esc(g.code)}</b></td>${CFO_GWP_GASES.map(([k]) => `<td class="num">${cfoEfNum(g[k])}</td>`).join('')}<td class="cfo-ref">${esc(g.reference || '')}</td><td>${g.used ? '✓' : ''}</td><td>${esc(g.status)}</td></tr>`).join('') || null, 'ไม่มี GWP');
+      list.map((g) => `<tr data-pick="${esc(g.code)}"><td class="c-name"><b>${esc(g.code)}</b></td>${CFO_GWP_GASES.map(([k]) => `<td class="num c-num">${cfoEfNum(g[k])}</td>`).join('')}<td class="c-reference">${esc(g.reference || '')}</td><td class="c-unit">${g.used ? '✓' : ''}</td><td class="c-unit">${esc(g.status)}</td></tr>`).join('') || null, 'ไม่มี GWP');
     picked = null;
     ['cfo-edit', 'cfo-del'].forEach((b) => { if ($(b)) $(b).disabled = true; });
     bindRowSelect($('cfo-rows'), (code) => { picked = m.gwp.find((g) => g.code === code); ['cfo-edit', 'cfo-del'].forEach((b) => { if ($(b)) $(b).disabled = !picked; }); });
@@ -871,8 +875,8 @@ function cfoSetRef(body, m, rerender, sheet) {
   const groups = [...new Set(rows.map((r) => r.grp).filter(Boolean))];
   const gwp = m.gwp.find((g) => g.code === 'AR5' && g.status === 'Active') || m.gwp.find((g) => g.status === 'Active') || {};
   let picked = null;
-  const thead = `<tr>${spec.cols.map(([, label, unit]) => `<th${unit ? ' class="num"' : ' rowspan="2"'}>${esc(label)}</th>`).join('')}</tr>
-    <tr>${spec.cols.filter((c) => c[2]).map((c) => `<th class="num cfo-unit">${esc(c[2])}</th>`).join('')}</tr>`;
+  const thead = `<tr>${spec.cols.map(([key, label, unit, num]) => `<th class="${cfoCol(key, num)}${unit ? ' num' : ''}"${unit ? '' : ' rowspan="2"'}>${esc(label)}</th>`).join('')}</tr>
+    <tr>${spec.cols.filter((c) => c[2]).map((c) => `<th class="num cfo-unit c-num">${esc(c[2])}</th>`).join('')}</tr>`;
   const draw = () => {
     const term = cfoFilter.q.trim().toLowerCase();
     const list = rows.filter((r) => (!cfoFilter.status || r.status === cfoFilter.status)
@@ -884,13 +888,12 @@ function cfoSetRef(body, m, rerender, sheet) {
       const heading = !r.unit && r.total == null && r.co2 == null;
       const child = /^-\s/.test(r.name);
       const cell = ([key, , , num]) => {
-        if (num) return `<td class="num"${r[key] == null ? '' : ` title="${esc(r[key])}"`}>${cfoRefNum(r[key])}</td>`;
+        if (num) return `<td class="num c-num"${r[key] == null ? '' : ` title="${esc(r[key])}"`}>${cfoRefNum(r[key])}</td>`;
         if (key === 'name') {
           const name = `${child ? r.name.replace(/^-\s*/, '') : r.name}${r.ratio != null ? ` (สัดส่วน ${cfoEfNum(r.ratio)})` : ''}`;
-          return `<td class="cfo-ref cfo-name${heading ? ' cfo-head' : ''}${child ? ' cfo-child' : ''}" title="${esc(name)}">${esc(name)}</td>`;
+          return `<td class="c-name${heading ? ' cfo-head' : ''}${child ? ' cfo-child' : ''}" title="${esc(name)}">${esc(name)}</td>`;
         }
-        if (key === 'reference' || key === 'remark') return `<td class="cfo-ref" title="${esc(r[key] || '')}">${esc(r[key] || '')}</td>`;
-        return `<td>${esc(r[key] || '')}</td>`;
+        return `<td class="${cfoCol(key)}" title="${esc(r[key] || '')}">${esc(r[key] || '')}</td>`;
       };
       return `${top}<tr data-pick="${r.id}"${r.status === 'Inactive' ? ' class="is-muted"' : ''}>${spec.cols.map(cell).join('')}</tr>`;
     }).join('') || `<tr><td class="empty" colspan="${spec.cols.length}">ยังไม่มีรายการ</td></tr>`;
@@ -906,7 +909,7 @@ function cfoSetRef(body, m, rerender, sheet) {
       ${m.admin ? `<div class="action-bar">${button('cfo-add', 'เพิ่ม', 'primary')}${button('cfo-edit', 'แก้ไข', 'secondary', 'disabled')}${button('cfo-del', 'ลบ', 'danger', 'disabled')}</div>` : ''}
     </div>
     <div class="table-wrap sheet" id="cfo-rows"></div>
-    <p class="sum-meta">${esc(spec.title)} · ${rows.length} รายการ · ตารางอ้างอิงตามแผ่น EF TGO AR5 V2 ไว้ดูค่าและที่มา${spec.cols.some((c) => c[0] === 'co2') ? ` · Total ว่าง = คิดจาก GWP ${esc(gwp.code || '')} (CO₂ + Fossil CH₄ × ${gwp.ch4_fossil ?? '-'} + CH₄ × ${gwp.ch4 ?? '-'} + N₂O × ${gwp.n2o ?? '-'})` : ''}</p>`;
+    <p class="sum-meta">${esc(spec.title)} · ${rows.length} รายการ · ${sheet === 'cfp' ? 'กรอกเอง หรือคัดลอกจาก Excel แล้ววางในหน้าต่างเพิ่ม' : 'ตารางอ้างอิงตามแผ่น EF TGO AR5 V2 ไว้ดูค่าและที่มา'}${spec.cols.some((c) => c[0] === 'co2') ? ` · Total ว่าง = คิดจาก GWP ${esc(gwp.code || '')} (CO₂ + Fossil CH₄ × ${gwp.ch4_fossil ?? '-'} + CH₄ × ${gwp.ch4 ?? '-'} + N₂O × ${gwp.n2o ?? '-'})` : ''}</p>`;
   $('cfo-f-q').value = cfoFilter.q;
   draw();
   a5Lift(body);
