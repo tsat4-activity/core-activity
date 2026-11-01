@@ -34,9 +34,10 @@
 - `public/js/act-planner.js` ป้ายบทบาทของ SMF (`APL_ROLE_LABEL` แยกตามกิจกรรม) + หน้า Dashboard > Team
 - `public/js/units.js` ชื่อ SMF แสดง "SMF · Smart Factory"
 
-## Dashboard > ภาพรวม (ผู้ใช้กำหนด 2026-11-01)
+## Dashboard > ภาพรวม · หน้าหลัก (ผู้ใช้กำหนด 2026-11-01)
 
-SMF (Smart Factory) ดูแลโครงการหลัก 5S · CFO · SMF: แท็บแรกของ SMF Dashboard แสดง KPI รวม (ความคืบหน้าแผนเฉลี่ย · แผนเลยกำหนด · Issue 5ส ที่ยังเปิด · คนในทีม) และการ์ดต่อโครงการ: ความคืบหน้าแผนงาน · ผลลัพธ์หลัก · ทีม · ปัญหา / เลยกำหนด พร้อมปุ่มเปิด Dashboard ของโครงการนั้น · API `GET /api/act/overview?year=` (`server/modules/act/overview.js`)
+- **SMF Dashboard > ภาพรวม** = เฉพาะ SMF: KPI (ความคืบหน้ารวม · โครงการปีนี้ · หัวข้อเลยกำหนด · คนในทีม) + การ์ดต่อโครงการ (ความคืบหน้า · สถานะหัวข้อหลัก · เลยกำหนด · ทีมโครงการ) · `aplDrawSmfOverview`
+- **หน้าหลัก** = ภาพรวมกิจกรรมในโรงงาน 5S · CFO · SMF (การ์ดต่อกิจกรรม + ปุ่มเปิด Dashboard) · `aplHome` / `aplDrawOverview` · API `GET /api/act/overview?year=` (`server/modules/act/overview.js`)
 
 ## โครงการรายปี (ผู้ใช้กำหนด 2026-11-01)
 

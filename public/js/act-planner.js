@@ -430,7 +430,8 @@ function aplOpenForm(activity, tasks, task, parentId, rerender, units = []) {
 }
 
 const APL_DASH_TABS = { schedule: 'Schedule', team: 'Team' };
-// SMF (Smart Factory) oversees the main projects: its Dashboard opens on ภาพรวม of 5S, CFO and SMF (ผู้ใช้กำหนด 2026-11-01).
+// SMF Dashboard opens on ภาพรวม of its own projects of the year (Smart OEE, Vision Camera, Work Flow Automation);
+// the overview of every activity (5S · CFO · SMF) is the home page (ผู้ใช้กำหนด 2026-11-01).
 const APL_DASH_TABS_OF = { smf: { overview: 'ภาพรวม', ...APL_DASH_TABS } };
 const APL_SET_TABS = { team: 'ทีม', plan: 'แผนงาน' };
 // SMF: its projects of the year come between ทีม and แผนงาน (ผู้ใช้กำหนด 2026-11-01)
@@ -458,13 +459,13 @@ async function aplDashboard(target, activity) {
   });
   if ($('a5-year')) $('a5-year').onchange = () => { a5Year = Number($('a5-year').value); rerender(); };
   const body = $('a5-body');
-  if (tab === 'overview') return aplDrawOverview(body);
+  if (tab === 'overview') return aplDrawSmfOverview(body, activity);
   if (tab === 'team') return aplDrawTeam(body, activity, me.access.admin);
   return aplRender(body, activity, { inPage: true, readOnly: true });
 }
 
-// ภาพรวม (server: server/modules/act/overview.js): KPIs of all projects, then one card per project with
-// plan progress · key results · team · open problems, and a link to that project's Dashboard.
+// หน้าหลัก = ภาพรวมกิจกรรมในโรงงาน (server: server/modules/act/overview.js): KPIs of every activity, then one card per
+// activity (5S · CFO · SMF) with plan progress · key results · team · open problems, and a link to its Dashboard.
 const OV_PLAN = [['early', 'เสร็จก่อนแผน'], ['done', 'เสร็จ'], ['ahead', 'เร็วกว่าแผน'], ['ontrack', 'ตามแผน'], ['behind', 'ช้ากว่าแผน'], ['late', 'เสร็จช้า'], ['overdue', 'เลยกำหนด'], ['waiting', 'ยังไม่ถึง']];
 const OV_UNIT_LABEL = { '5s': { standard: 'ทีมมาตรฐาน', academic: 'ทีมวิชาการ', pr: 'ทีมประชาสัมพันธ์', audit: 'ทีมตรวจประเมิน' } };
 const ovNum = (n, d = 0) => Number(n || 0).toLocaleString('th-TH', { maximumFractionDigits: d, minimumFractionDigits: d });
@@ -649,3 +650,47 @@ for (const id of APL_ON) {
   VIEWS[`${id}-home`] = (target) => aplDashboard(target, id);
   VIEWS[`${id}-setting`] = (target) => aplSetting(target, id);
 }
+
+
+// SMF Dashboard > ภาพรวม: only SMF and its projects of the year (ผู้ใช้กำหนด 2026-11-01) · one card per project with
+// plan progress, status of its main items, late items and team.
+async function aplDrawSmfOverview(body, activity) {
+  const data = await api(`/api/act/overview?year=${a5Year}`);
+  const p = data.projects.find((x) => x.activity === activity) || {};
+  const projects = (p.projects || []).filter((u) => u.status === 'Active');
+  const unassigned = p.plan ? p.plan.items - projects.reduce((s, u) => s + (p.plan.byUnit?.[u.code]?.items || 0), 0) : 0;
+  const kpis = [
+    chartKpi({ label: 'ความคืบหน้ารวม', value: p.plan?.percent || 0, unit: '%', pie: p.plan?.percent || 0, note: `${p.plan?.items || 0} หัวข้อหลัก`, color: CHART.series[0] }),
+    chartKpi({ label: 'โครงการปีนี้', value: projects.length, unit: 'โครงการ', icon: 'account_tree', note: projects.map((u) => u.name).join(' · ') || 'ยังไม่มี (Setting > โครงการ)', color: CHART.series[1] }),
+    chartKpi({ label: 'หัวข้อเลยกำหนด', value: ovNum(p.plan?.overdue), unit: 'รายการ', icon: 'event_busy', note: 'ทุกโครงการ', color: CHART.series[2] }),
+    chartKpi({ label: 'คนในทีม', value: ovNum(p.team?.people), unit: 'คน', icon: 'groups', note: `คณะกรรมการ ${ovNum(p.team?.committee)} · Smart Team ${ovNum(p.team?.smart)}`, color: CHART.series[3] })
+  ].join('');
+  const row = (label, value) => `<div class="ov-row"><span>${label}</span><b>${value}</b></div>`;
+  const card = (u, i) => {
+    const plan = p.plan?.byUnit?.[u.code];
+    const chips = plan ? OV_PLAN.filter(([code]) => plan.counts[code]).map(([code, label]) => `<span class="ov-chip is-${code}">${label} ${plan.counts[code]}</span>`).join('') : '';
+    const late = plan?.late?.length ? `<ul class="ov-late">${plan.late.map((t) => `<li><span>${esc(actNoLead(t.title))}</span><b>${actShort(t.end)} · ${t.progress}%</b></li>`).join('')}</ul>` : '';
+    return `<article class="card ov-card" style="--ov:${CHART.series[i % CHART.series.length]}">
+      <div class="ov-head"><strong>${esc(u.name)}</strong></div>
+      <div class="ov-sec"><div class="ov-sec-title">ความคืบหน้าแผนงาน</div>${plan ? `<div class="ov-progress"><div class="ov-bar"><span style="width:${plan.percent}%"></span></div><b>${plan.percent}%</b></div><div class="ov-chips">${chips}</div>` : '<p class="sum-meta">ยังไม่มีหัวข้อแผน (Setting > แผนงาน เลือกโครงการนี้)</p>'}</div>
+      <div class="ov-sec"><div class="ov-sec-title">สรุป</div>${row('หัวข้อหลัก', ovNum(plan?.items))}${row('เลยกำหนด', `<span class="${plan?.overdue ? 'ov-bad' : ''}">${ovNum(plan?.overdue)}</span>`)}${row('ทีมโครงการ', `${ovNum(p.team?.units?.[u.code])} คน`)}${late}</div>
+    </article>`;
+  };
+  body.innerHTML = `<div class="ch-kpis">${kpis}</div>
+    <div class="ov-grid">${projects.map(card).join('') || `<p class="empty">ยังไม่มีโครงการปี ${a5Year} · เพิ่มที่ Setting > โครงการ</p>`}</div>
+    <p class="sum-meta">${unassigned > 0 ? `หัวข้อที่ยังไม่ระบุโครงการ ${unassigned} หัวข้อ · ` : ''}ข้อมูล ณ ${actShort(data.today)} ${data.year} · ภาพรวมทุกกิจกรรม (5S · CFO · SMF) อยู่ที่หน้าหลัก</p>`;
+  a5Lift(body);
+}
+
+// หน้าหลัก: ภาพรวมกิจกรรมในโรงงาน 5S · CFO · SMF with its own year (ผู้ใช้กำหนด 2026-11-01).
+async function aplHome(target) {
+  const now = new Date().getFullYear();
+  const years = [...new Set([now - 1, now, now + 1, a5Year])].sort();
+  target.innerHTML = `<div class="view-body"><section class="card">
+    ${pageBar('<strong class="plan-label">ภาพรวมกิจกรรมในโรงงาน</strong>', `<div class="a5-year">${field('ปี', `<select id="ov-year">${options(years, a5Year)}</select>`)}</div>`, 'ov')}
+    <div id="ov-body"><div class="empty">กำลังโหลด...</div></div>
+  </section></div>`;
+  $('ov-year').onchange = () => { a5Year = Number($('ov-year').value); aplHome(target).catch(onErr); };
+  await aplDrawOverview($('ov-body'));
+}
+VIEWS.main = aplHome;

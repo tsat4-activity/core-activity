@@ -466,15 +466,6 @@ function modulePage(target, title, meta, cards) {
   bindGo(target);
 }
 
-async function renderMain(target) {
-  modulePage(target, 'TSAT4 Activity', 'เลือกกิจกรรมที่ต้องการเข้า', [
-    ['5s', 'event', '5S', 'Dashboard, Transaction, Setting'],
-    ['cfo', 'eco', 'CFO', 'Carbon Footprint for Organization'],
-    ['smf', 'precision_manufacturing', 'SMF', 'Smart Factory: ทีมและแผนงาน'],
-    ['act-plan', 'calendar_month', 'ปฏิทิน', 'แผนของทุกกิจกรรม รายสัปดาห์ เดือน และปี']
-  ]);
-}
-
 function bindHold(button, onDone) {
   const fill = button.querySelector('.hold-fill');
   let active = false;
@@ -508,7 +499,7 @@ function bindHold(button, onDone) {
   button.addEventListener('contextmenu', (event) => event.preventDefault());
 }
 
-VIEWS.main = renderMain;
+// VIEWS.main (หน้าหลัก = ภาพรวมกิจกรรม 5S · CFO · SMF) is aplHome in act-planner.js
 
 // One search field, no ค้นหา button to press (ผู้ใช้กำหนด 2026-10-29):
 // · .search-slot (filters a list): typing runs the slot's search after a short pause.
