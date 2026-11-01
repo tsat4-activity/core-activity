@@ -492,7 +492,7 @@ body[data-zone] .plan-col.is-today{border-color:var(--zone)}
 .page-bar .field select{padding-right:22px}
 .page-bar .search-slot{flex:0 1 200px;min-width:150px;width:auto}
 .page-bar .search-slot .btn{padding:0 8px}
-.page-bar .search-slot .field{max-width:none}
+.page-bar .search-slot .field{flex:1 1 auto;min-width:0;max-width:none}.page-bar .search-slot .field > input{width:100%;min-width:0;max-width:none}
 .page-bar .action-bar{margin-left:0;align-items:flex-end;align-self:flex-end}
 .page-bar .action-bar .btn,.page-bar-right > .btn,.toolbar .action-bar .btn{align-self:flex-end}
 .page-bar .seg,.page-bar .a5-year,.page-bar .btn{flex:0 0 auto;white-space:nowrap}

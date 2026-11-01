@@ -29,14 +29,13 @@ const CFO_SOURCE_TYPES = [['self', 'Self collect (1st)'], ['supplier', 'Supplier
 const CFO_COMPANY = [['company_name', 'ชื่อธุรกิจ'], ['company_address', 'สถานที่ตั้ง'], ['company_area', 'พื้นที่โรงงาน'], ['company_business', 'ประเภทธุรกิจ'],
   ['company_customers', 'กลุ่มลูกค้าหลัก'], ['company_employees', 'จำนวนพนักงาน'], ['company_updated', 'อัพเดท (วันที่)'], ['company_register', 'วันที่ขอขึ้นทะเบียน'], ['company_photo1', 'ลิงก์รูป 1'], ['company_photo2', 'ลิงก์รูป 2'],
   ['base_year', 'ปีฐาน'], ['target_percent', 'เป้าลด (% จากปีฐาน)'], ['septic_bod', 'บ่อเกรอะ BOD (g/คน/วัน)'], ['septic_b0', 'บ่อเกรอะ B0'], ['septic_mcf', 'บ่อเกรอะ MCF'], ['septic_i', 'บ่อเกรอะ I']];
-const CFO_EF_GAS = [['co2', 'CO₂'], ['ch4_fossil', 'Fossil CH₄'], ['ch4', 'CH₄'], ['n2o', 'N₂O'], ['sf6', 'SF₆'], ['nf3', 'NF₃'], ['hfc', 'HFCs'], ['hfc_gwp', 'GWP HFCs'], ['pfc', 'PFCs'], ['pfc_gwp', 'GWP PFCs'],
-  ['other', 'GHG นอกข้อกำหนด'], ['other_gwp', 'GWP นอกข้อกำหนด'], ['co2_bio', 'CO₂ ชีวมวล (รายงานแยก)']];
 let cfoDashTab = 'summary';
 let cfoSetTab = 'team';
-// Setting > Emission Factor (ผู้ใช้กำหนด 2026-11-01): the EF that activities use + separate reference tables of the TGO sheet
+// Setting > Emission Factor (ผู้ใช้กำหนด 2026-11-01): GWP + separate reference tables of the TGO sheet
 // "EF TGO AR5 V2" (mt_cfo_ef_ref, seed db/act/cfo_ef_ref_seed.sql) so each table is easy to read and add to.
-const CFO_EF_VIEWS = { ef: 'EF ที่ใช้คำนวณ', gwp: 'GWP', energy: 'EF พลังงาน', chemical: 'GWP สารเคมี', ipcc: 'EF IPCC' };
-let cfoEfView = 'ef';
+// "EF ที่ใช้คำนวณ" was cut from here (ผู้ใช้สั่ง 2026-11-01); mt_cfo_ef stays for activities and entries.
+const CFO_EF_VIEWS = { energy: 'EF พลังงาน', gwp: 'GWP', chemical: 'GWP สารเคมี', ipcc: 'EF IPCC' };
+let cfoEfView = 'energy';
 const CFO_GWP_GASES = [['co2', 'CO₂'], ['ch4_fossil', 'Fossil CH₄'], ['ch4', 'CH₄'], ['n2o', 'N₂O'], ['sf6', 'SF₆'], ['nf3', 'NF₃']];
 // Columns of each reference table as in the sheet: [key, label, unit line, number column]
 const CFO_REF_COLS = {
@@ -51,7 +50,7 @@ const cfoFilter = { scope: '', department: '', q: '', status: '' };
 const cfoDash = { department: '', chartScope: '', scope: '1', page: '1' };
 // transaction filters: Scope → month (one month, or '' = the year) → category (main) → activity (sub)
 const cfoTx = { scope: '1', month: String(new Date().getMonth() + 1), category: '', activity: '' };
-const cfoHeads = { entries: { sort: '', dir: 'asc', filters: {} }, activities: { sort: '', dir: 'asc', filters: {} }, ef: { sort: '', dir: 'asc', filters: {} } };
+const cfoHeads = { entries: { sort: '', dir: 'asc', filters: {} }, activities: { sort: '', dir: 'asc', filters: {} } };
 // reference tables: 5 decimals like the user asked (ผู้ใช้กำหนด 2026-11-01) · the full value is in the cell's tooltip
 const cfoRefNum = (v) => (v == null || v === '' ? '' : Number(v).toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 5 }));
 // small EF values (1.02e-6) stay readable: exponent below 0.001, else up to 6 decimals like the sheet
@@ -788,80 +787,13 @@ function cfoSetActivities(body, m, rerender) {
   });
 }
 
-function cfoSetEf(body, m, rerender) {
-  let picked = null;
-  const draw = () => {
-    const term = cfoFilter.q.trim().toLowerCase();
-    const list = listQuery(m.ef.filter((e) => (!cfoFilter.scope || e.scope_code.startsWith(`${cfoFilter.scope}-`)) && (!cfoFilter.status || e.status === cfoFilter.status)
-      && (!term || `${e.name} ${e.kind || ''} ${e.code || ''}`.toLowerCase().includes(term))), cfoHeads.ef, (e, key) => e[key] ?? '');
-    fillTable('cfo-rows', [{ label: 'หมวด', key: 'scope_code' }, { label: 'กลุ่ม', key: 'kind' }, { label: 'ชื่อ', key: 'name' }, { label: 'หน่วย', key: 'unit' }, { label: 'kgCO₂e/หน่วย', key: 'kgco2e', num: true }, { label: 'อ้างอิง', key: 'reference' }, 'ใช้แล้ว', { label: 'สถานะ', key: 'status' }],
-      list.map((e) => `<tr data-pick="${e.id}"><td>${esc(e.scope_code)}</td><td>${esc(e.kind || '')}</td><td title="${esc(e.detail || '')}">${esc(e.name)}</td><td>${esc(e.unit)}</td><td class="num">${e.kgco2e == null ? '-' : cfoT(e.kgco2e)}</td><td class="cfo-ref" title="${esc(e.reference || '')}">${esc(e.reference || '')}</td><td>${e.used ? '✓' : ''}</td><td>${esc(e.status)}</td></tr>`).join(''), 'ไม่มี EF', headFor(cfoHeads.ef, draw));
-    bindRowSelect($('cfo-rows'), (id) => { picked = m.ef.find((e) => String(e.id) === id); ['cfo-edit', 'cfo-del'].forEach((b) => { if ($(b)) $(b).disabled = !picked; }); });
-  };
-  body.innerHTML = `
-    <div class="toolbar a5-filters">
-      ${cfoEfPicker()}
-      ${field('Scope', `<select id="cfo-f-scope">${options(['', '1', '2', '3'], cfoFilter.scope, (v) => (v ? `Scope ${v}` : 'ทั้งหมด'))}</select>`)}
-      ${field('สถานะ', `<select id="cfo-f-status">${options(['', 'Active', 'Inactive'], cfoFilter.status, (v) => v || 'ทั้งหมด')}</select>`)}
-      ${searchSlot('ค้นหา', 'cfo-f-q', 'cfo-f-search', { placeholder: 'ชื่อ กลุ่ม หรือรหัส' })}
-      ${m.admin ? `<div class="action-bar">${button('cfo-add', 'เพิ่ม', 'primary')}${button('cfo-edit', 'แก้ไข', 'secondary', 'disabled')}${button('cfo-del', 'ลบ', 'danger', 'disabled')}</div>` : ''}
-    </div>
-    <div class="table-wrap sheet" id="cfo-rows"></div>
-    <p class="sum-meta">${m.ef.length} EF · EF ที่ใช้แล้วแก้ค่าไม่ได้ ให้เพิ่มแถวใหม่แล้วตั้งตัวเดิมเป็น Inactive</p>`;
-  $('cfo-f-q').value = cfoFilter.q;
-  draw();
-  a5Lift(body);
-  $('cfo-f-scope').onchange = () => { cfoFilter.scope = $('cfo-f-scope').value; draw(); };
-  $('cfo-f-status').onchange = () => { cfoFilter.status = $('cfo-f-status').value; draw(); };
-  const search = () => { cfoFilter.q = $('cfo-f-q').value; draw(); };
-  $('cfo-f-search').onclick = search;
-  onEnter('cfo-f-q', search);
-  if (!m.admin) return;
-  const form = (e) => {
-    const lock = e?.used ? ' disabled' : '';
-    openPopup(e ? 'แก้ไข Emission factor' : 'เพิ่ม Emission factor', `
-      ${e?.used ? '<p class="sum-meta">EF นี้ถูกใช้แล้ว แก้ได้เฉพาะชื่อ รายละเอียด ที่มา อ้างอิง และสถานะ</p>' : ''}
-      ${field('หมวด', `<select id="cfo-e-scope"${lock}>${m.scopes.map((s) => `<option value="${esc(s.code)}"${s.code === e?.scope_code ? ' selected' : ''}>${esc(s.code)} ${esc(s.name)}</option>`).join('')}</select>`)}
-      ${field('กลุ่ม', `<input id="cfo-e-kind" maxlength="120" value="${esc(e?.kind || '')}">`)}
-      ${field('ชื่อ', `<input id="cfo-e-name" maxlength="300" value="${esc(e?.name || '')}">`)}
-      ${field('รายละเอียด', `<textarea id="cfo-e-detail" rows="2" maxlength="1000">${esc(e?.detail || '')}</textarea>`)}
-      ${field('หน่วย', `<input id="cfo-e-unit" maxlength="30" value="${esc(e?.unit || '')}"${lock}>`)}
-      ${field('kgCO₂e ต่อหน่วย (รวม)', `<input id="cfo-e-kgco2e" type="number" step="any" value="${esc(e?.kgco2e ?? '')}"${lock}>`)}
-      <p class="sum-meta">ค่าแยกก๊าซ (kg GHG ต่อหน่วย) ใช้ใน Fr-04.1 · HFCs / PFCs ไม่ใส่ GWP = ค่าเป็น kgCO₂e อยู่แล้ว</p>
-      <div class="cfo-gas">${CFO_EF_GAS.map(([k, label]) => field(label, `<input id="cfo-e-${k}" type="number" step="any" value="${esc(e?.[k] ?? '')}"${lock}>`)).join('')}</div>
-      <label class="check"><input id="cfo-e-separate" type="checkbox"${e?.separate ? ' checked' : ''}${lock}> การปล่อย GHG โดยตรงที่ทำการรายงานแยก (ไม่รวมในยอด Scope)</label>
-      ${field('ที่มาข้อมูล', `<select id="cfo-e-source">${options(['', ...CFO_SOURCE_TYPES.map(([k]) => k)], e?.source_type || '', (v) => (CFO_SOURCE_TYPES.find(([k]) => k === v) || [, 'ไม่ระบุ'])[1])}</select>`)}
-      ${field('Substitute', `<input id="cfo-e-substitute" maxlength="300" value="${esc(e?.substitute || '')}">`)}
-      ${field('อ้างอิง', `<input id="cfo-e-ref" maxlength="500" value="${esc(e?.reference || '')}">`)}
-      ${field('ปี', `<input id="cfo-e-year" type="number" value="${esc(e?.year ?? a5Year)}">`)}
-      ${field('สถานะ', `<select id="cfo-e-status">${options(['Active', 'Inactive'], e?.status || 'Active')}</select>`)}`, async () => {
-      const body2 = { scope_code: $('cfo-e-scope').value, kind: $('cfo-e-kind').value, name: $('cfo-e-name').value, detail: $('cfo-e-detail').value, unit: $('cfo-e-unit').value,
-        kgco2e: $('cfo-e-kgco2e').value, reference: $('cfo-e-ref').value, year: $('cfo-e-year').value, status: $('cfo-e-status').value,
-        separate: $('cfo-e-separate').checked, source_type: $('cfo-e-source').value, substitute: $('cfo-e-substitute').value };
-      CFO_EF_GAS.forEach(([k]) => { body2[k] = $(`cfo-e-${k}`).value; });
-      await a5Api(CFO, `cfo/ef${e ? `/${e.id}` : ''}`, { method: e ? 'PATCH' : 'POST', body: body2 });
-      toast('บันทึกแล้ว');
-      closePopup();
-      rerender();
-    });
-  };
-  $('cfo-add').onclick = () => form(null);
-  $('cfo-edit').onclick = () => picked && form(picked);
-  $('cfo-del').onclick = () => picked && confirmPopup('ลบ EF', `ลบ ${esc(picked.name)}`, async () => {
-    await a5Api(CFO, `cfo/ef/${picked.id}`, { method: 'DELETE' });
-    toast('ลบแล้ว');
-    rerender();
-  });
-}
-
-// Emission Factor tab: one table at a time, picked in the row of buttons above it.
 // The table picker is a dropdown at the start of each table's toolbar (ผู้ใช้กำหนด 2026-11-01) · cells have light grid lines.
 function cfoSetEfTab(body, m, rerender) {
   body.innerHTML = '<div id="cfo-efbody" class="cfo-efgrid"></div>';
   const box = $('cfo-efbody');
+  if (!CFO_EF_VIEWS[cfoEfView]) cfoEfView = 'energy';
   if (cfoEfView === 'gwp') cfoSetGwp(box, m, rerender);
-  else if (CFO_REF_COLS[cfoEfView]) cfoSetRef(box, m, rerender, cfoEfView);
-  else cfoSetEf(box, m, rerender);
+  else cfoSetRef(box, m, rerender, cfoEfView);
   $('cfo-ef-view').onchange = () => { cfoEfView = $('cfo-ef-view').value; cfoSetEfTab(body, m, rerender); };
 }
 
@@ -870,15 +802,29 @@ const cfoEfPicker = () => field('ตาราง', `<select id="cfo-ef-view">${o
 // GWP100a per gas (mt_cfo_gwp) · a set that activities use keeps its values: add a new code and set the old one Inactive.
 function cfoSetGwp(body, m, rerender) {
   let picked = null;
+  const draw = () => {
+    const term = cfoFilter.q.trim().toLowerCase();
+    const list = m.gwp.filter((g) => (!cfoFilter.status || g.status === cfoFilter.status) && (!term || `${g.code} ${g.reference || ''}`.toLowerCase().includes(term)));
+    fillTable('cfo-rows', ['รหัส', ...CFO_GWP_GASES.map(([, label]) => ({ label, num: true })), 'อ้างอิง', 'ใช้แล้ว', 'สถานะ'],
+      list.map((g) => `<tr data-pick="${esc(g.code)}"><td><b>${esc(g.code)}</b></td>${CFO_GWP_GASES.map(([k]) => `<td class="num">${cfoEfNum(g[k])}</td>`).join('')}<td class="cfo-ref">${esc(g.reference || '')}</td><td>${g.used ? '✓' : ''}</td><td>${esc(g.status)}</td></tr>`).join('') || null, 'ไม่มี GWP');
+    picked = null;
+    ['cfo-edit', 'cfo-del'].forEach((b) => { if ($(b)) $(b).disabled = true; });
+    bindRowSelect($('cfo-rows'), (code) => { picked = m.gwp.find((g) => g.code === code); ['cfo-edit', 'cfo-del'].forEach((b) => { if ($(b)) $(b).disabled = !picked; }); });
+  };
   body.innerHTML = `
     <div class="toolbar a5-filters">${cfoEfPicker()}
+      ${field('สถานะ', `<select id="cfo-f-status">${options(['', 'Active', 'Inactive'], cfoFilter.status, (v) => v || 'ทั้งหมด')}</select>`)}
+      ${searchSlot('ค้นหา', 'cfo-f-q', 'cfo-f-search', { placeholder: 'รหัส หรืออ้างอิง' })}
       ${m.admin ? `<div class="action-bar">${button('cfo-add', 'เพิ่ม', 'primary')}${button('cfo-edit', 'แก้ไข', 'secondary', 'disabled')}${button('cfo-del', 'ลบ', 'danger', 'disabled')}</div>` : ''}</div>
     <div class="table-wrap sheet" id="cfo-rows"></div>
     <p class="sum-meta">กิจกรรมเลือกชุด GWP ที่ใช้ (Setting > กิจกรรม) · ชุดที่ใช้แล้วแก้ค่าไม่ได้ ให้เพิ่มรหัสใหม่แล้วตั้งตัวเดิมเป็น Inactive</p>`;
-  fillTable('cfo-rows', ['รหัส', ...CFO_GWP_GASES.map(([, label]) => ({ label, num: true })), 'อ้างอิง', 'ใช้แล้ว', 'สถานะ'],
-    m.gwp.map((g) => `<tr data-pick="${esc(g.code)}"><td><b>${esc(g.code)}</b></td>${CFO_GWP_GASES.map(([k]) => `<td class="num">${cfoEfNum(g[k])}</td>`).join('')}<td>${esc(g.reference || '')}</td><td>${g.used ? '✓' : ''}</td><td>${esc(g.status)}</td></tr>`).join(''), 'ยังไม่มี GWP');
+  $('cfo-f-q').value = cfoFilter.q;
+  draw();
   a5Lift(body);
-  bindRowSelect($('cfo-rows'), (code) => { picked = m.gwp.find((g) => g.code === code); ['cfo-edit', 'cfo-del'].forEach((b) => { if ($(b)) $(b).disabled = !picked; }); });
+  $('cfo-f-status').onchange = () => { cfoFilter.status = $('cfo-f-status').value; draw(); };
+  const search = () => { cfoFilter.q = $('cfo-f-q').value; draw(); };
+  $('cfo-f-search').onclick = search;
+  onEnter('cfo-f-q', search);
   if (!m.admin) return;
   const status = [['Active', 'Active'], ['Inactive', 'Inactive']];
   $('cfo-add').onclick = () => {
